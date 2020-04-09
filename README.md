@@ -12,6 +12,9 @@ The RUN command is implemented but is sort of useless.  Output from your program
 Any errors are also displayed in the scrollbox.
 
 USAGE:
+python3 ./ampy-gui.py
+
+Instructions:
 - Plug in your device
 - Set your port and optionally the baud rate and delay.
 - Hit connect

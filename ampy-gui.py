@@ -21,7 +21,11 @@ class AppWindow(Gtk.ApplicationWindow):
 		self.FILENAME = 1
 		self.TYPE = 2
 
+		
 		self.current_local_path = os.getcwd()
+
+		self.progpath = os.path.dirname(sys.argv[0])        
+	
 		self.current_remote_path = ''
 
 		css = b"""
@@ -315,7 +319,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		# Build the tree path out of current_local_path.
 
 		iter = store.append()
-		pixbuf = GdkPixbuf.Pixbuf.new_from_file ("directory.png")
+		pixbuf = GdkPixbuf.Pixbuf.new_from_file (self.progpath+"/"+"directory.png")
 		store.set(iter, self.ICON, pixbuf, self.FILENAME, "..")
 
 		# Parse through the directory, adding all of its contents to the model.
@@ -325,14 +329,14 @@ class AppWindow(Gtk.ApplicationWindow):
 		for file in filelst:
 			temp = location + "/" + file
 			if os.path.isdir(temp):
-				pixbuf = GdkPixbuf.Pixbuf.new_from_file ("directory.png")
+				pixbuf = GdkPixbuf.Pixbuf.new_from_file (self.progpath+"/"+"directory.png")
 				iter = store.append()
 				store.set(iter, self.ICON, pixbuf, self.FILENAME, file)
 
 		for file in filelst:
 			temp = location + "/" + file
 			if os.path.isfile(temp):
-				pixbuf = GdkPixbuf.Pixbuf.new_from_file ("file.png")
+				pixbuf = GdkPixbuf.Pixbuf.new_from_file (self.progpath+"/"+"file.png")
 				iter = store.append()
 				store.set(iter, self.ICON, pixbuf, self.FILENAME, file)
 
@@ -343,20 +347,20 @@ class AppWindow(Gtk.ApplicationWindow):
 		nondirs = []
 		#Add .. to directory
 		iter = remote_store.append()
-		pixbuf = GdkPixbuf.Pixbuf.new_from_file ("directory.png")
+		pixbuf = GdkPixbuf.Pixbuf.new_from_file (self.progpath+"/"+"directory.png")
 		remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, "..",self.TYPE,'d')
 		filelist=self.load_remote_directory(self.current_remote_path)
 		for f in filelist:
 			if self.is_remote_dir(self.current_remote_path+'/'+f):
 				iter = remote_store.append()
-				pixbuf = GdkPixbuf.Pixbuf.new_from_file ("directory.png")
+				pixbuf = GdkPixbuf.Pixbuf.new_from_file (progpath+"/"+"directory.png")
 				isdir = 'd'
 				remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, f,self.TYPE, isdir)
 			else:
 				nondirs.append(f)
 		for f in range(len(nondirs)):
 			iter = remote_store.append()
-			pixbuf = GdkPixbuf.Pixbuf.new_from_file ("file.png")
+			pixbuf = GdkPixbuf.Pixbuf.new_from_file (self.progpath+"/"+"file.png")
 			remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, nondirs[f],self.TYPE,'f')
 
 
@@ -522,9 +526,9 @@ class AppWindow(Gtk.ApplicationWindow):
 					args=['run',usepath]
 					output=subprocess.run(self.ampy_command+args,capture_output=True)
 					if output.returncode == 0:
-						self.set_terminal_text(terminal_buffer,"---------Run Output---------")
-						self.set_terminal_text(terminal_buffer,output.stdout.decode("UTF-8"))
-						self.set_terminal_text(terminal_buffer,"----------------------------")
+						self.set_terminal_text(terminal_buffer,"---------Run Output---------\n")
+						self.set_terminal_text(terminal_buffer,output.stdout.decode("UTF-8")+"\n")
+						self.set_terminal_text(terminal_buffer,"----------------------------\n")
 					else:
 						error = output.stderr.decode("UTF-8")
 						index=error.find("RuntimeError:")
@@ -580,7 +584,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
 class Warning(Gtk.Dialog):
 	def __init__(self,parent,msg):
-		Gtk.Dialog.__init__(self, "Ooops", parent, 0)
+		Gtk.Dialog.__init__(self, "Error", parent, 0)
 
 		self.add_button(Gtk.STOCK_OK, Gtk.ResponseType.OK)
 

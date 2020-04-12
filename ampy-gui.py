@@ -353,7 +353,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		for f in filelist:
 			if self.is_remote_dir(self.current_remote_path+'/'+f):
 				iter = remote_store.append()
-				pixbuf = GdkPixbuf.Pixbuf.new_from_file (progpath+"/"+"directory.png")
+				pixbuf = GdkPixbuf.Pixbuf.new_from_file (self.progpath+"/"+"directory.png")
 				isdir = 'd'
 				remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, f,self.TYPE, isdir)
 			else:

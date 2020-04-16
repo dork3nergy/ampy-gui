@@ -56,7 +56,8 @@ class AppWindow(Gtk.ApplicationWindow):
 		self.ampy_args=['/dev/ttyUSB0', '115200', '0']
 		self.update_ampy_command()
 		
-		self.baud_rates=["300", "600", "1200", "2400", "4800", "9600", "14400", "19200", "28800", "38400", "57600","115200"]
+		self.baud_rates=["300", "600", "1200", "2400", "4800", "9600", "14400", "19200", "28800", "38400", "57600","115200",
+			"230400", "460800", "500000", "576000", "921600"]
 
 		box_outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
 		box_outer.set_homogeneous(False)

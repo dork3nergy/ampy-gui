@@ -5,6 +5,7 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GObject, GdkPixbuf
 from gi.repository import Gdk
+from ampy.pyboard import PyboardError
 import subprocess
 import math
 
@@ -250,8 +251,8 @@ class AppWindow(Gtk.ApplicationWindow):
 		try:
 			os.stat(self.ampy_args[0])
 			return 0
-		except OSError:
-			dialog=Warning(self,"Can't Find Your Remote Device\nCheck the Port Settings")
+		except (OSError, PyboardError):
+			dialog=Warning(self,"Can't Find Your Remote Device '{}'\nCheck the Port Settings".format(self.ampy_args[0]))
 			response = dialog.run()
 			dialog.destroy()
 			return -1

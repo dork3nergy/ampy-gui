@@ -25,7 +25,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		
 		self.current_local_path = os.getcwd()
 
-		self.progpath = os.path.dirname(sys.argv[0])        
+		self.progpath = os.path.join(os.getcwd(), os.path.dirname(__file__))
 	
 		self.current_remote_path = ''
 
@@ -327,7 +327,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		# Build the tree path out of current_local_path.
 
 		iter = store.append()
-		pixbuf = GdkPixbuf.Pixbuf.new_from_file (self.progpath+"/"+"directory.png")
+		pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
 		store.set(iter, self.ICON, pixbuf, self.FILENAME, "..")
 
 		# Parse through the directory, adding all of its contents to the model.
@@ -337,14 +337,14 @@ class AppWindow(Gtk.ApplicationWindow):
 		for file in filelst:
 			temp = location + "/" + file
 			if os.path.isdir(temp):
-				pixbuf = GdkPixbuf.Pixbuf.new_from_file (self.progpath+"/"+"directory.png")
+				pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
 				iter = store.append()
 				store.set(iter, self.ICON, pixbuf, self.FILENAME, file)
 
 		for file in filelst:
 			temp = location + "/" + file
 			if os.path.isfile(temp):
-				pixbuf = GdkPixbuf.Pixbuf.new_from_file (self.progpath+"/"+"file.png")
+				pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "file.png"))
 				iter = store.append()
 				store.set(iter, self.ICON, pixbuf, self.FILENAME, file)
 
@@ -355,20 +355,20 @@ class AppWindow(Gtk.ApplicationWindow):
 		nondirs = []
 		#Add .. to directory
 		iter = remote_store.append()
-		pixbuf = GdkPixbuf.Pixbuf.new_from_file (self.progpath+"/"+"directory.png")
+		pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
 		remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, "..",self.TYPE,'d')
 		filelist=self.load_remote_directory(self.current_remote_path)
 		for f in filelist:
 			if self.is_remote_dir(self.current_remote_path+'/'+f):
 				iter = remote_store.append()
-				pixbuf = GdkPixbuf.Pixbuf.new_from_file (self.progpath+"/"+"directory.png")
+				pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
 				isdir = 'd'
 				remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, f,self.TYPE, isdir)
 			else:
 				nondirs.append(f)
 		for f in range(len(nondirs)):
 			iter = remote_store.append()
-			pixbuf = GdkPixbuf.Pixbuf.new_from_file (self.progpath+"/"+"file.png")
+			pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "file.png"))
 			remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, nondirs[f],self.TYPE,'f')
 
 

@@ -716,6 +716,7 @@ class Application(Gtk.Application):
 			self.debug = True
 		else:
 			self.debug = False
+		# TODO: command-line argument for config file
 
 	def do_activate(self):
 		if not self.window:

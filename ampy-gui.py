@@ -463,7 +463,6 @@ class AppWindow(Gtk.ApplicationWindow):
 											"Error uploading file from device: '{}'".format(output.stderr.decode("utf-8")))
 
 	def delete_button_clicked(self, button, remote_treeview, terminal_buffer):
-		# TODO: pop-up 'Are you sure you want to delete {}?'!!!
 		response = self.check_for_device()
 		if (response == 0):
 			row_selected = self.remote_row_selected(remote_treeview)
@@ -501,7 +500,6 @@ class AppWindow(Gtk.ApplicationWindow):
 						self.set_terminal_text(terminal_buffer,error[index:]+"\n\n")
 
 	def rmdir_button_clicked(self, button, remote_treeview, terminal_buffer):
-		# TODO: pop-up 'Are you sure you want to delete {}?'!!!
 		response = self.check_for_device()
 		if (response == 0):
 			row_selected = self.remote_row_selected(remote_treeview)
@@ -510,6 +508,23 @@ class AppWindow(Gtk.ApplicationWindow):
 			else:
 				fname,ftype = row_selected
 				if ftype == 'd':
+					# Confirmation dialog
+					msg = "Are you sure you want to delete the directory '{}' from the device?".format(fname)
+					dialog = Gtk.MessageDialog(
+						transient_for=self,
+						flags=0,
+						message_type=Gtk.MessageType.QUESTION,
+						buttons=Gtk.ButtonsType.YES_NO,
+						text=msg,
+					)
+					dialog.set_decorated(False)
+					response = dialog.run()
+					dialog.destroy()
+
+					if response == Gtk.ResponseType.NO:
+						self.debug_print("Directory deletion canceled")
+						return
+
 					args=['rmdir',self.current_remote_path+'/'+fname]
 					output=subprocess.run(self.ampy_command+args,capture_output=True)
 					if output.returncode == 0:

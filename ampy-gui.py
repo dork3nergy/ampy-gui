@@ -575,6 +575,7 @@ class AppWindow(Gtk.ApplicationWindow):
 				self.set_terminal_text(terminal_buffer,error[index:]+"\n\n")
 
 	def run_button_clicked(self,button, remote_treeview, terminal_buffer):
+		# TODO: the ampy 'run' command only runs files from your local computer, not from the remote device (as this function is trying to achieve)
 		response=self.check_for_device()
 		if (response == 0):
 			row_selected = self.remote_row_selected(remote_treeview)
@@ -584,10 +585,8 @@ class AppWindow(Gtk.ApplicationWindow):
 				fname,ftype = row_selected
 				if ftype == 'f':
 					usepath = self.current_remote_path +'/'+fname
-					usepath=usepath.strip('/')
-						
+
 					args=['run',usepath]
-					print(usepath)
 					output=subprocess.run(self.ampy_command+args,capture_output=True)
 					if output.returncode == 0:
 						self.set_terminal_text(terminal_buffer,"---------Run Output---------\n")

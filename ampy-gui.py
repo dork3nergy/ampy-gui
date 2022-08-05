@@ -247,7 +247,7 @@ class AppWindow(Gtk.ApplicationWindow):
 									"Connected to device {}\nHello world!! :)".format(self.ampy_args[0]))
 
 	def update_ampy_command(self):
-		self.ampy_command = ['ampy', '-p', self.ampy_args[0], '-b',self.ampy_args[1], '-d',self.ampy_args[2]]
+		self.ampy_command = ['ampy', '--port', self.ampy_args[0], '--baud',self.ampy_args[1], '--delay',self.ampy_args[2]]
 
 	def check_for_device(self):
 		try:
@@ -264,7 +264,8 @@ class AppWindow(Gtk.ApplicationWindow):
 		self.ampy_args[0]=port.get_text()
 		if self.check_for_device() != -1:
 			self.update_ampy_command()
-			print("Port Changed")
+			if self.debug:
+				print("Port Changed")
 	def on_baud_change(self,baud):
 		selected = baud.get_active()
 		self.ampy_args[1]= self.baud_rates[selected]
@@ -349,7 +350,6 @@ class AppWindow(Gtk.ApplicationWindow):
 				store.set(iter, self.ICON, pixbuf, self.FILENAME, file)
 
 	def populate_remote_tree_model(self, remote_treeview):
-
 		remote_store = remote_treeview.get_model()
 		remote_store.clear()
 		nondirs = []
@@ -372,9 +372,9 @@ class AppWindow(Gtk.ApplicationWindow):
 			remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, nondirs[f],self.TYPE,'f')
 
 
-	def is_remote_dir(self,path):
-		args=['ampy', '-p', self.ampy_args[0], '-b',self.ampy_args[1], '-d',self.ampy_args[2] ,'ls',path]
-		output=subprocess.run(args,capture_output=True)
+	def is_remote_dir(self, path):
+		args=['ls',path]
+		output=subprocess.run(self.ampy_command + args,capture_output=True)
 		if output.returncode == 0:
 			return True
 		else:
@@ -383,18 +383,16 @@ class AppWindow(Gtk.ApplicationWindow):
 	def load_remote_directory(self,path):
 		response=self.check_for_device()
 		if (response == 0):
-			args=['ampy', '-p', self.ampy_args[0], '-b',self.ampy_args[1], '-d',self.ampy_args[2] ,'ls',path]
-			output=subprocess.run(args,capture_output=True)
+			args=['ls', path]
+			output=subprocess.run(self.ampy_command + args, capture_output=True)
 			if output.stderr.decode("utf-8") == "":
 				filestring = output.stdout.decode("utf-8")
-				filelist=filestring.split('\n')
-				i=0
+				filelist = filestring.split('\n')
 				returnlist = []
 				for fname in filelist:
 					if fname != "" :
 						head,tail = os.path.split(fname)
 						returnlist.append(tail)
-						i += 1
 				return returnlist
 			else:
 				return []
@@ -643,9 +641,6 @@ class Warning(Gtk.Dialog):
 		self.set_default_size(300,50)
 		self.set_decorated(False)
 		self.set_border_width(2)
-
-		action_area= self.get_action_area()
-		action_area.set_halign(3)
 
 		box = self.get_content_area()
 		box.set_homogeneous(True)

@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import sys, os
+import configparser
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GObject, GdkPixbuf
@@ -53,8 +54,14 @@ class AppWindow(Gtk.ApplicationWindow):
 			screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
 		)
 
-
-		self.ampy_args=['/dev/ttyUSB0', '115200', '0']
+		# Load settings from a configuration file
+		config = configparser.ConfigParser()
+		config.read('config.ini')
+		try:
+			self.ampy_args = [config['DEFAULT']['port'], config['DEFAULT']['baud'], config['DEFAULT']['delay']]
+		except KeyError:
+			print("Could not load configurations, falling back to defaults.")
+			self.ampy_args = ['/dev/ttyUSB0', '115200', '0']
 		self.update_ampy_command()
 		
 		self.baud_rates=["300", "600", "1200", "2400", "4800", "9600", "14400", "19200", "28800", "38400", "57600","115200",
@@ -580,6 +587,7 @@ class AppWindow(Gtk.ApplicationWindow):
 					usepath=usepath.strip('/')
 						
 					args=['run',usepath]
+					print(usepath)
 					output=subprocess.run(self.ampy_command+args,capture_output=True)
 					if output.returncode == 0:
 						self.set_terminal_text(terminal_buffer,"---------Run Output---------\n")

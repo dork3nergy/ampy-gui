@@ -474,6 +474,23 @@ class AppWindow(Gtk.ApplicationWindow):
 			else:
 				fname,ftype = row_selected
 				if ftype == 'f':
+					# Confirmation dialog
+					msg = "Are you sure you want to delete the file '{}' from the device?".format(fname)
+					dialog = Gtk.MessageDialog(
+						transient_for=self,
+						flags=0,
+						message_type=Gtk.MessageType.QUESTION,
+						buttons=Gtk.ButtonsType.YES_NO,
+						text=msg,
+					)
+					dialog.set_decorated(False)
+					response = dialog.run()
+					dialog.destroy()
+
+					if response == Gtk.ResponseType.NO:
+						self.debug_print("File deletion canceled")
+						return
+
 					args=['rm',self.current_remote_path+'/'+fname]
 					output=subprocess.run(self.ampy_command+args,capture_output=True)
 					if output.returncode == 0:

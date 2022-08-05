@@ -600,8 +600,12 @@ class AppWindow(Gtk.ApplicationWindow):
 		end_iter = textbuffer.get_end_iter()
 		textbuffer.insert(end_iter, ">>> " + inString)
 
+	def debug_print(self, inString):
+		if self.debug:
+			print(inString)
+
 	def print_and_terminal(self, textbuffer, inString):
-		print(inString)
+		self.debug_print(inString)
 		self.set_terminal_text(textbuffer, inString + "\n\n")
 
 	def refresh_local(self, button,local_treeview):
@@ -672,12 +676,19 @@ class Application(Gtk.Application):
 						 **kwargs)
 		self.window = None
 
+		# Handle command-line arguments
+		if len(sys.argv) == 2 and (sys.argv[1] == "debug"):
+			self.debug = True
+		else:
+			self.debug = False
+
 	def do_activate(self):
 		if not self.window:
 			self.window = AppWindow(application=self, title="AMPY-GUI")
 		self.window.show_all()
 		self.window.present()
+		self.window.debug = self.debug
 
 if __name__ == "__main__":
 	app = Application()
-	app.run(sys.argv)
+	app.run()

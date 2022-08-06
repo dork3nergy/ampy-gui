@@ -130,18 +130,18 @@ class AppWindow(Gtk.ApplicationWindow):
 		box_outer.pack_start(filebrowser_box,True, True,12)
 
 		# CREATE LOCAL TREEVIEW
-		local_treeview = Gtk.TreeView.new()
+		self.local_treeview = Gtk.TreeView.new()
 		
-		self.setup_local_tree_view(local_treeview)
-		self.setup_local_tree_model(local_treeview)
-		local_treeview.connect("row-activated", self.on_local_row_activated)
+		self.setup_local_tree_view(self.local_treeview)
+		self.setup_local_tree_model(self.local_treeview)
+		self.local_treeview.connect("row-activated", self.on_local_row_activated)
 
 		# CREATE REMOTE TREEVIEW
-		remote_treeview = Gtk.TreeView.new()
+		self.remote_treeview = Gtk.TreeView.new()
 
-		self.setup_remote_tree_view(remote_treeview)
-		self.setup_remote_tree_model(remote_treeview)
-		remote_treeview.connect("row-activated", self.on_remote_row_activated)
+		self.setup_remote_tree_view(self.remote_treeview)
+		self.setup_remote_tree_model(self.remote_treeview)
+		self.remote_treeview.connect("row-activated", self.on_remote_row_activated)
 
 		#CREATE SCROLLED WINDOWS
 		local_scrolled_win = Gtk.ScrolledWindow(valign="fill", halign="fill")
@@ -157,21 +157,21 @@ class AppWindow(Gtk.ApplicationWindow):
 		local_scrolled_frame.set_shadow_type(0)
 		
 		#ADD TREEVIEWS TO SCROLLED WINDOWS
-		local_scrolled_win.add(local_treeview)
+		local_scrolled_win.add(self.local_treeview)
 
 		local_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6,halign="fill")
 		local_box.pack_start(local_scrolled_win,True,True,0)
 		local_refresh_button = Gtk.Button.new_with_label("Refresh")
-		local_refresh_button.connect("clicked", self.refresh_local,local_treeview)
+		local_refresh_button.connect("clicked", self.refresh_local, self.local_treeview)
 		local_box.pack_start(local_refresh_button,False,False,0)
 		local_scrolled_frame.add(local_box)
 
-		remote_scrolled_win.add(remote_treeview)
+		remote_scrolled_win.add(self.remote_treeview)
 
 		remote_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6,halign="fill")
 		remote_box.pack_start(remote_scrolled_win,True,True,0)
 		remote_refresh_button = Gtk.Button.new_with_label("Refresh")
-		remote_refresh_button.connect("clicked", self.refresh_remote,remote_treeview)
+		remote_refresh_button.connect("clicked", self.refresh_remote, self.remote_treeview)
 		remote_box.pack_start(remote_refresh_button,False,False,0)
 
 		#DEFINE TRANSFER BUTTONS
@@ -229,17 +229,17 @@ class AppWindow(Gtk.ApplicationWindow):
 		terminal_scroll.add(terminal_view)
 		terminal_window.pack_start(terminal_scroll,True,True,6)
 
-		put_button.connect("clicked",self.put_button_clicked, local_treeview, remote_treeview,terminal_buffer)
-		get_button.connect("clicked",self.get_button_clicked, local_treeview, remote_treeview,terminal_buffer)
-		connect_button.connect("clicked",self.connect_device, remote_treeview,terminal_buffer)
-		run_button.connect("clicked",self.run_button_clicked, remote_treeview,terminal_buffer)
-		mkdir_button.connect("clicked",self.mkdir_button_clicked, remote_treeview,terminal_buffer)
-		rmdir_button.connect("clicked",self.rmdir_button_clicked, remote_treeview,terminal_buffer)
-		reset_button.connect("clicked",self.reset_button_clicked,remote_treeview,terminal_buffer)
-		delete_button.connect("clicked",self.delete_button_clicked, remote_treeview,terminal_buffer)
+		put_button.connect("clicked", self.put_button_clicked, self.local_treeview, self.remote_treeview,terminal_buffer)
+		get_button.connect("clicked", self.get_button_clicked, self.local_treeview, self.remote_treeview,terminal_buffer)
+		connect_button.connect("clicked", self.connect_device, self.remote_treeview,terminal_buffer)
+		run_button.connect("clicked", self.run_button_clicked, self.remote_treeview,terminal_buffer)
+		mkdir_button.connect("clicked", self.mkdir_button_clicked, self.remote_treeview,terminal_buffer)
+		rmdir_button.connect("clicked", self.rmdir_button_clicked, self.remote_treeview,terminal_buffer)
+		reset_button.connect("clicked", self.reset_button_clicked, self.remote_treeview,terminal_buffer)
+		delete_button.connect("clicked", self.delete_button_clicked, self.remote_treeview,terminal_buffer)
 
 		#SET FOCUS TO LOCAL FILELIST
-		local_treeview.grab_focus()
+		self.local_treeview.grab_focus()
 		
 	def force_refresh(self):
 		while Gtk.events_pending():     #   this forces GTK to refresh the screen

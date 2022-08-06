@@ -11,6 +11,18 @@ import subprocess
 import math
 
 class AppWindow(Gtk.ApplicationWindow):
+	local_treeview = None
+	remote_treeview = None
+	
+	put_button = None
+	get_button = None
+	run_button = None
+	delete_button = None
+	rmdir_button = None
+	mkdir_button = None
+	reset_button = None
+
+	terminal_buffer = None
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
@@ -130,18 +142,20 @@ class AppWindow(Gtk.ApplicationWindow):
 		box_outer.pack_start(filebrowser_box,True, True,12)
 
 		# CREATE LOCAL TREEVIEW
-		local_treeview = Gtk.TreeView.new()
+		self.local_treeview = Gtk.TreeView.new()
+		self.local_treeview.set_activate_on_single_click(True)
 		
-		self.setup_local_tree_view(local_treeview)
-		self.setup_local_tree_model(local_treeview)
-		local_treeview.connect("row-activated", self.on_local_row_activated)
+		self.setup_local_tree_view(self.local_treeview)
+		self.setup_local_tree_model(self.local_treeview)
+		self.local_treeview.connect("row-activated", self.on_local_row_activated)
 
 		# CREATE REMOTE TREEVIEW
-		remote_treeview = Gtk.TreeView.new()
+		self.remote_treeview = Gtk.TreeView.new()
+		self.remote_treeview.set_activate_on_single_click(True)
 
-		self.setup_remote_tree_view(remote_treeview)
-		self.setup_remote_tree_model(remote_treeview)
-		remote_treeview.connect("row-activated", self.on_remote_row_activated)
+		self.setup_remote_tree_view(self.remote_treeview)
+		self.setup_remote_tree_model(self.remote_treeview)
+		self.remote_treeview.connect("row-activated", self.on_remote_row_activated)
 
 		#CREATE SCROLLED WINDOWS
 		local_scrolled_win = Gtk.ScrolledWindow(valign="fill", halign="fill")
@@ -157,30 +171,32 @@ class AppWindow(Gtk.ApplicationWindow):
 		local_scrolled_frame.set_shadow_type(0)
 		
 		#ADD TREEVIEWS TO SCROLLED WINDOWS
-		local_scrolled_win.add(local_treeview)
+		local_scrolled_win.add(self.local_treeview)
 
 		local_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6,halign="fill")
 		local_box.pack_start(local_scrolled_win,True,True,0)
 		local_refresh_button = Gtk.Button.new_with_label("Refresh")
-		local_refresh_button.connect("clicked", self.refresh_local, local_treeview)
+		local_refresh_button.connect("clicked", self.refresh_local, self.local_treeview)
 		local_box.pack_start(local_refresh_button,False,False,0)
 		local_scrolled_frame.add(local_box)
 
-		remote_scrolled_win.add(remote_treeview)
+		remote_scrolled_win.add(self.remote_treeview)
 
 		remote_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6,halign="fill")
 		remote_box.pack_start(remote_scrolled_win,True,True,0)
 		remote_refresh_button = Gtk.Button.new_with_label("Refresh")
-		remote_refresh_button.connect("clicked", self.refresh_remote, remote_treeview)
+		remote_refresh_button.connect("clicked", self.refresh_remote, self.remote_treeview)
 		remote_box.pack_start(remote_refresh_button,False,False,0)
 
 		#DEFINE TRANSFER BUTTONS
 		putget_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6,valign="center")
-		get_button = Gtk.Button.new_with_label("<< GET <<")
-		put_button = Gtk.Button.new_with_label(">> PUT >>")
+		self.get_button = Gtk.Button.new_with_label("<< GET <<")
+		self.put_button = Gtk.Button.new_with_label(">> PUT >>")
+		self.get_button.set_sensitive(False)
+		self.put_button.set_sensitive(False)
 
-		putget_box.pack_start(get_button,False,False,0)
-		putget_box.pack_start(put_button,False,False,0)
+		putget_box.pack_start(self.get_button,False,False,0)
+		putget_box.pack_start(self.put_button,False,False,0)
 
 		#DEFINE REMOTE FUNCTION BOXES
 
@@ -188,17 +204,23 @@ class AppWindow(Gtk.ApplicationWindow):
 		remote_services = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6,halign="fill")
 
 
-		mkdir_button = Gtk.Button.new_with_label("MKDIR")
-		rmdir_button = Gtk.Button.new_with_label("RMDIR")
-		run_button = Gtk.Button.new_with_label("RUN")
-		reset_button = Gtk.Button.new_with_label("RESET")
-		delete_button = Gtk.Button.new_with_label("DELETE")
+		self.mkdir_button = Gtk.Button.new_with_label("MKDIR")
+		self.rmdir_button = Gtk.Button.new_with_label("RMDIR")
+		self.run_button = Gtk.Button.new_with_label("RUN")
+		self.reset_button = Gtk.Button.new_with_label("RESET")
+		self.delete_button = Gtk.Button.new_with_label("DELETE")
 
-		remote_buttons_box.pack_start(mkdir_button,False,False,0)
-		remote_buttons_box.pack_start(rmdir_button,False,False,0)
-		remote_buttons_box.pack_start(delete_button,False,False,0)
-		remote_buttons_box.pack_start(reset_button,False,False,0)
-		remote_buttons_box.pack_start(run_button,False,False,0)
+		self.mkdir_button.set_sensitive(False)
+		self.rmdir_button.set_sensitive(False)
+		self.run_button.set_sensitive(False)
+		self.reset_button.set_sensitive(False)
+		self.delete_button.set_sensitive(False)
+
+		remote_buttons_box.pack_start(self.mkdir_button,False,False,0)
+		remote_buttons_box.pack_start(self.rmdir_button,False,False,0)
+		remote_buttons_box.pack_start(self.delete_button,False,False,0)
+		remote_buttons_box.pack_start(self.reset_button,False,False,0)
+		remote_buttons_box.pack_start(self.run_button,False,False,0)
 
 		#PACK IT UP
 		#Create Frame for Remote Services
@@ -229,17 +251,23 @@ class AppWindow(Gtk.ApplicationWindow):
 		terminal_scroll.add(terminal_view)
 		terminal_window.pack_start(terminal_scroll,True,True,6)
 
-		put_button.connect("clicked", self.put_button_clicked, local_treeview, remote_treeview,terminal_buffer)
-		get_button.connect("clicked", self.get_button_clicked, local_treeview, remote_treeview,terminal_buffer)
-		connect_button.connect("clicked", self.connect_device, remote_treeview,terminal_buffer)
-		run_button.connect("clicked", self.run_button_clicked, remote_treeview,terminal_buffer)
-		mkdir_button.connect("clicked", self.mkdir_button_clicked, remote_treeview,terminal_buffer)
-		rmdir_button.connect("clicked", self.rmdir_button_clicked, remote_treeview,terminal_buffer)
-		reset_button.connect("clicked", self.reset_button_clicked, remote_treeview,terminal_buffer)
-		delete_button.connect("clicked", self.delete_button_clicked, remote_treeview,terminal_buffer)
+		self.put_button.connect("clicked", self.put_button_clicked, self.local_treeview, self.remote_treeview,terminal_buffer)
+		self.get_button.connect("clicked", self.get_button_clicked, self.local_treeview, self.remote_treeview,terminal_buffer)
+		connect_button.connect("clicked", self.connect_device, self.remote_treeview,terminal_buffer)
+		self.run_button.connect("clicked", self.run_button_clicked, self.remote_treeview,terminal_buffer)
+		self.mkdir_button.connect("clicked", self.mkdir_button_clicked, self.remote_treeview,terminal_buffer)
+		self.rmdir_button.connect("clicked", self.rmdir_button_clicked, self.remote_treeview,terminal_buffer)
+		self.reset_button.connect("clicked", self.reset_button_clicked, self.remote_treeview,terminal_buffer)
+		self.delete_button.connect("clicked", self.delete_button_clicked, self.remote_treeview,terminal_buffer)
+
+		# Clear terminal button
+		clear_terminal_button = Gtk.Button.new_with_label("Clear terminal")
+		box_outer.pack_start(clear_terminal_button, False, False, 0)
+		clear_terminal_button.connect("clicked", self.clear_terminal, terminal_buffer)
+
 
 		#SET FOCUS TO LOCAL FILELIST
-		local_treeview.grab_focus()
+		self.local_treeview.grab_focus()
 		
 	def force_refresh(self):
 		while Gtk.events_pending():     #   this forces GTK to refresh the screen
@@ -418,7 +446,7 @@ class AppWindow(Gtk.ApplicationWindow):
 	def local_row_selected(self, local_treeview):
 		selected = local_treeview.get_selection()
 		model, iter = selected.get_selected()
-		if(iter is not None):
+		if (iter is not None):
 			fname = model.get_value(iter, self.FILENAME)
 			return fname
 		else:
@@ -622,6 +650,23 @@ class AppWindow(Gtk.ApplicationWindow):
 			if os.path.isdir(location):
 				self.current_local_path = location
 				self.populate_local_tree_model(local_treeview)
+			self.put_button.set_sensitive(True)
+		else:
+			self.put_button.set_sensitive(False)
+
+	def activate_remote_file_buttons(self):
+		self.get_button.set_sensitive(True)
+		self.delete_button.set_sensitive(True)
+
+	def deactivate_remote_file_buttons(self):
+		self.get_button.set_sensitive(False)
+		self.delete_button.set_sensitive(False)
+
+	def activate_remote_directory_buttons(self):
+		self.rmdir_button.set_sensitive(True)
+
+	def deactivate_remote_directory_buttons(self):
+		self.rmdir_button.set_sensitive(False)
 
 	def on_remote_row_activated(self, remote_treeview, fpath, column):
 		response=self.check_for_device()
@@ -640,11 +685,24 @@ class AppWindow(Gtk.ApplicationWindow):
 					head,tail = os.path.split(self.current_remote_path)
 					self.current_remote_path = head
 					self.populate_remote_tree_model(remote_treeview)
+					self.deactivate_remote_file_buttons()
+					self.deactivate_remote_directory_buttons()
 				else:
 					if(ftype == 'd'):
 						self.current_remote_path=location
 						self.populate_remote_tree_model(remote_treeview)
-				
+						self.activate_remote_file_buttons()
+						self.deactivate_remote_directory_buttons()
+					else:
+						self.activate_remote_directory_buttons()
+						self.deactivate_remote_file_buttons()
+		else:
+			self.deactivate_remote_file_buttons()
+			self.deactivate_remote_directory_buttons()
+
+	def clear_terminal(self, button, textbuffer):
+
+		textbuffer.delete(textbuffer.get_start_iter(), textbuffer.get_end_iter())
 	def set_terminal_text(self,textbuffer,inString):
 		end_iter = textbuffer.get_end_iter()
 		textbuffer.insert(end_iter, ">>> " + inString)

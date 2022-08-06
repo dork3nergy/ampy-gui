@@ -13,6 +13,8 @@ import math
 class AppWindow(Gtk.ApplicationWindow):
 	local_treeview = None
 	remote_treeview = None
+
+	remote_refresh_button = None
 	
 	put_button = None
 	get_button = None
@@ -143,19 +145,19 @@ class AppWindow(Gtk.ApplicationWindow):
 
 		# CREATE LOCAL TREEVIEW
 		self.local_treeview = Gtk.TreeView.new()
-		self.local_treeview.set_activate_on_single_click(True)
 		
 		self.setup_local_tree_view(self.local_treeview)
 		self.setup_local_tree_model(self.local_treeview)
 		self.local_treeview.connect("row-activated", self.on_local_row_activated)
+		self.local_treeview.get_selection().connect("changed", self.on_local_row_selected)
 
 		# CREATE REMOTE TREEVIEW
 		self.remote_treeview = Gtk.TreeView.new()
-		self.remote_treeview.set_activate_on_single_click(True)
 
 		self.setup_remote_tree_view(self.remote_treeview)
 		self.setup_remote_tree_model(self.remote_treeview)
 		self.remote_treeview.connect("row-activated", self.on_remote_row_activated)
+		self.remote_treeview.get_selection().connect("changed", self.on_remote_row_selected)
 
 		#CREATE SCROLLED WINDOWS
 		local_scrolled_win = Gtk.ScrolledWindow(valign="fill", halign="fill")
@@ -184,9 +186,10 @@ class AppWindow(Gtk.ApplicationWindow):
 
 		remote_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6,halign="fill")
 		remote_box.pack_start(remote_scrolled_win,True,True,0)
-		remote_refresh_button = Gtk.Button.new_with_label("Refresh")
-		remote_refresh_button.connect("clicked", self.refresh_remote, self.remote_treeview)
-		remote_box.pack_start(remote_refresh_button,False,False,0)
+		self.remote_refresh_button = Gtk.Button.new_with_label("Refresh")
+		self.remote_refresh_button.set_sensitive(False)
+		self.remote_refresh_button.connect("clicked", self.refresh_remote, self.remote_treeview)
+		remote_box.pack_start(self.remote_refresh_button,False,False,0)
 
 		#DEFINE TRANSFER BUTTONS
 		putget_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6,valign="center")
@@ -287,12 +290,14 @@ class AppWindow(Gtk.ApplicationWindow):
 	def check_for_device(self):
 		try:
 			os.stat(self.ampy_args[0])
+			self.activate_remote_buttons()
 			return 0
 		except (OSError, PyboardError):
 			dialog = Warning(self,
 							 "Can't Find Your Remote Device '{}'\nCheck the Port Settings".format(self.ampy_args[0]))
-			response = dialog.run()
+			dialog.run()
 			dialog.destroy()
+			self.deactivate_remote_buttons()
 			return -1
 		
 	def on_port_change(self,port,event):
@@ -383,6 +388,9 @@ class AppWindow(Gtk.ApplicationWindow):
 				pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "file.png"))
 				iter = store.append()
 				store.set(iter, self.ICON, pixbuf, self.FILENAME, file)
+
+		if self.put_button:
+			self.put_button.set_sensitive(False)
 
 	def populate_remote_tree_model(self, remote_treeview):
 		remote_store = remote_treeview.get_model()
@@ -637,6 +645,13 @@ class AppWindow(Gtk.ApplicationWindow):
 						index=error.find("RuntimeError:")
 						self.set_terminal_text(terminal_buffer,error[index:]+"\n\n")
 
+	def on_local_row_selected(self, tree_selection):
+		model, iterator = tree_selection.get_selected()
+		if iterator:
+			self.put_button.set_sensitive(True)
+		else:
+			self.put_button.set_sensitive(False)
+
 	def on_local_row_activated(self, local_treeview, fpath, column):
 		model = local_treeview.get_model()
 		iter = model.get_iter(fpath)
@@ -650,9 +665,22 @@ class AppWindow(Gtk.ApplicationWindow):
 			if os.path.isdir(location):
 				self.current_local_path = location
 				self.populate_local_tree_model(local_treeview)
-			self.put_button.set_sensitive(True)
-		else:
-			self.put_button.set_sensitive(False)
+
+	def deactivate_remote_buttons(self):
+		self.remote_refresh_button.set_sensitive(False)
+		self.get_button.set_sensitive(False)
+		self.mkdir_button.set_sensitive(False)
+		self.rmdir_button.set_sensitive(False)
+		self.delete_button.set_sensitive(False)
+		self.reset_button.set_sensitive(False)
+		self.run_button.set_sensitive(False)
+
+	def activate_remote_buttons(self):
+		# The other buttons need a file or directory to be selected first
+		self.remote_refresh_button.set_sensitive(True)
+		self.mkdir_button.set_sensitive(True)
+		self.reset_button.set_sensitive(True)
+		self.run_button.set_sensitive(True)
 
 	def activate_remote_file_buttons(self):
 		self.get_button.set_sensitive(True)
@@ -668,6 +696,29 @@ class AppWindow(Gtk.ApplicationWindow):
 	def deactivate_remote_directory_buttons(self):
 		self.rmdir_button.set_sensitive(False)
 
+	def on_remote_row_selected(self, tree_selection):
+		response = self.check_for_device()
+		if (response == 0):
+			model, iterator = tree_selection.get_selected()
+			iterator = model.get_iter("")
+			if iterator:
+				fname = model.get_value(iterator, self.FILENAME)
+				ftype = model.get_value(iterator, self.TYPE)
+
+				if (fname == ".."):
+					self.deactivate_remote_file_buttons()
+					self.deactivate_remote_directory_buttons()
+				else:
+					if (ftype == 'd'):
+						self.activate_remote_file_buttons()
+						self.deactivate_remote_directory_buttons()
+					else:
+						self.activate_remote_directory_buttons()
+						self.deactivate_remote_file_buttons()
+		else:
+			self.deactivate_remote_file_buttons()
+			self.deactivate_remote_directory_buttons()
+
 	def on_remote_row_activated(self, remote_treeview, fpath, column):
 		response=self.check_for_device()
 		if (response == 0):
@@ -675,7 +726,6 @@ class AppWindow(Gtk.ApplicationWindow):
 			iter = model.get_iter(fpath)
 			if iter:
 				fname = model.get_value(iter, self.FILENAME)
-				icon = model.get_value(iter, self.ICON)
 				ftype = model.get_value(iter, self.TYPE)
 				
 
@@ -685,20 +735,10 @@ class AppWindow(Gtk.ApplicationWindow):
 					head,tail = os.path.split(self.current_remote_path)
 					self.current_remote_path = head
 					self.populate_remote_tree_model(remote_treeview)
-					self.deactivate_remote_file_buttons()
-					self.deactivate_remote_directory_buttons()
 				else:
 					if(ftype == 'd'):
 						self.current_remote_path=location
 						self.populate_remote_tree_model(remote_treeview)
-						self.activate_remote_file_buttons()
-						self.deactivate_remote_directory_buttons()
-					else:
-						self.activate_remote_directory_buttons()
-						self.deactivate_remote_file_buttons()
-		else:
-			self.deactivate_remote_file_buttons()
-			self.deactivate_remote_directory_buttons()
 
 	def clear_terminal(self, button, textbuffer):
 

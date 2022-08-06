@@ -425,6 +425,8 @@ class AppWindow(Gtk.ApplicationWindow):
 			return 0
 
 	def get_button_clicked(self,button, local_treeview, remote_treeview,terminal_buffer):
+		""" Retrieves a file from the remote device
+		"""
 		response=self.check_for_device()
 		if (response == 0):
 			row_selected = self.remote_row_selected(remote_treeview)
@@ -447,6 +449,8 @@ class AppWindow(Gtk.ApplicationWindow):
 												"Error fetching file from device: '{}'".format(output.stderr.decode("utf-8")))
 
 	def put_button_clicked(self, button, local_treeview, remote_treeview, terminal_buffer):
+		""" Uploads a file to the remote device
+		"""
 		response = self.check_for_device()
 		if (response == 0):
 			file_selected = self.local_row_selected(local_treeview)
@@ -470,6 +474,8 @@ class AppWindow(Gtk.ApplicationWindow):
 											"Error uploading file from device: '{}'".format(output.stderr.decode("utf-8")))
 
 	def delete_button_clicked(self, button, remote_treeview, terminal_buffer):
+		""" Deletes a file from the remote device
+		"""
 		response = self.check_for_device()
 		if (response == 0):
 			row_selected = self.remote_row_selected(remote_treeview)
@@ -507,6 +513,8 @@ class AppWindow(Gtk.ApplicationWindow):
 						self.set_terminal_text(terminal_buffer,error[index:]+"\n\n")
 
 	def rmdir_button_clicked(self, button, remote_treeview, terminal_buffer):
+		""" Removes a directory on the remote device.
+		"""
 		response = self.check_for_device()
 		if (response == 0):
 			row_selected = self.remote_row_selected(remote_treeview)
@@ -542,6 +550,8 @@ class AppWindow(Gtk.ApplicationWindow):
 						self.set_terminal_text(terminal_buffer,error[index:]+"\n\n")
 					
 	def mkdir_button_clicked(self,button, remote_treeview, terminal_buffer):
+		""" Creates a new directory on the remote device.
+		"""
 		response=self.check_for_device()
 		if (response == 0):
 			dirname = ''
@@ -562,6 +572,8 @@ class AppWindow(Gtk.ApplicationWindow):
 					self.set_terminal_text(terminal_buffer,error[index:]+"\n\n")
 
 	def reset_button_clicked(self,button, remote_treeview,terminal_buffer):
+		""" Performs a soft reset/reboot of the remote device.
+		"""
 		response=self.check_for_device()
 		if (response == 0):
 			args=['reset']

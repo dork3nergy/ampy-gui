@@ -93,7 +93,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		
 		port_entry = Gtk.Entry()
 		baud_button= Gtk.ComboBoxText.new()
-		delay_spin = Gtk.SpinButton.new_with_range(0, 10, 1)
+		delay_spin = Gtk.SpinButton.new_with_range(0, 10, 0.1)
 		
 		#LOAD BAUD RATES INTO COMBO BOX
 		i=0
@@ -313,7 +313,6 @@ class AppWindow(Gtk.ApplicationWindow):
 		print("Baud Changed")
 	def on_delay_change(self,delay):
 		value = delay.get_value()
-		value = math.trunc(value)
 		self.ampy_args[2]=str(value)
 		self.update_ampy_command()
 		print("Delay Changed")

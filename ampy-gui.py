@@ -8,6 +8,7 @@ from gi.repository import Gtk, GObject, GdkPixbuf
 from gi.repository import Gdk
 from ampy.pyboard import PyboardError
 import subprocess
+import serial.tools.list_ports
 
 class AppWindow(Gtk.ApplicationWindow):
 	local_treeview = None
@@ -116,10 +117,12 @@ class AppWindow(Gtk.ApplicationWindow):
 		baud_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
 		delay_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
 
+		select_port_button = Gtk.Button.new_with_label("Select Port")
 		connect_button = Gtk.Button.new_with_label("Connect")
 
 		port_box.pack_start(port_label,False,False,0)
 		port_box.pack_start(port_entry,False,False,0)
+		port_box.pack_start(select_port_button,False,False,4)
 		baud_box.pack_start(baud_label,False,False,0)
 		baud_box.pack_start(baud_button,False,False,0)
 		delay_box.pack_start(delay_label,False,False,0)
@@ -276,6 +279,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		terminal_window.pack_start(terminal_scroll,True,True,6)
 
 		# TIE ACTIONS TO BUTTONS
+		select_port_button.connect("clicked", self.select_port_popup, port_entry)
 		connect_button.connect("clicked", self.connect_device, self.remote_treeview,terminal_buffer)
 		self.put_button.connect("clicked", self.put_button_clicked, self.local_treeview, self.remote_treeview,terminal_buffer)
 		self.get_button.connect("clicked", self.get_button_clicked, self.local_treeview, self.remote_treeview,terminal_buffer)
@@ -301,6 +305,18 @@ class AppWindow(Gtk.ApplicationWindow):
 		while Gtk.events_pending():     #   this forces GTK to refresh the screen
 			Gtk.main_iteration() 
 
+
+	def select_port_popup(self, button, port_entry):
+		dialog = SelectPortPopUp(self)
+		response = dialog.run()
+
+		if response == Gtk.ResponseType.OK:
+			port = dialog.get_result()
+			dialog.destroy()
+			port_entry.set_text(port)
+			self.on_port_change(port_entry, None)
+		else:
+			dialog.destroy()
 
 	def connect_device(self, button, remote_treeview,terminal_buffer):
 		response = self.check_for_device()
@@ -875,6 +891,81 @@ class PopUp(Gtk.Dialog):
 
 	def get_result(self):
 		return self.result
+
+
+class SelectPortPopUp(Gtk.Dialog):
+	def __init__(self, parent):
+		Gtk.Dialog.__init__(self, "Select port", parent, 0)
+		self.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+						 Gtk.STOCK_OK, Gtk.ResponseType.OK)
+
+		self.connect("response", self.on_response)
+		self.set_default_size(500, 400)
+		self.set_border_width(10)
+
+		# Init the treeview
+		self.treeview = Gtk.TreeView.new()
+		liststore = Gtk.ListStore(str)
+		self.treeview.set_model(liststore)
+		column = Gtk.TreeViewColumn.new()
+		column.set_title("Available serial ports")
+
+		renderer = Gtk.CellRendererText.new()
+		column.pack_start(renderer, True)
+		column.add_attribute(renderer, "text", 0)
+		self.treeview.append_column(column)
+		self.treeview.connect("row-activated", self.on_row_activated)
+
+		# Fill the treeview
+		self.refresh_ports(None, self.treeview)
+
+		# Button for refreshing the table
+		refresh_button = Gtk.Button.new_with_label("Refresh")
+		refresh_button.set_tooltip_text("Refresh the list of available ports")
+		refresh_button.connect("clicked", self.refresh_ports, self.treeview)
+
+		# Info label
+		info_label = Gtk.Label.new("Tip: don't know which port your remote device uses?\n\tUnplug your remote device, click the 'Refresh' button, plug it in again, and click the 'Refresh' button again.\n\tYour device port should now be displayed in the list..")
+
+		# Add the widgets to the dialog
+		area = self.get_content_area()
+		area.pack_start(self.treeview, True, True, 4)
+		area.pack_start(refresh_button, False, False, 4)
+		area.pack_start(info_label, False, False, 4)
+
+		self.show_all()
+
+	def refresh_ports(self, button, treeview):
+		# Get all the ports
+		ports = self.get_ports()
+
+		remote_store = treeview.get_model()
+		remote_store.clear()
+
+		for port in ports:
+			iter = remote_store.append()
+			remote_store.set(iter, 0, port)
+
+	def on_response(self, widget, response_id):
+		selected = self.treeview.get_selection()
+		model, iter = selected.get_selected()
+		if (iter is not None):
+			self.result = model.get_value(iter, 0)
+		else:
+			self.result = None
+
+	def on_row_activated(self, treeview, path, column):
+		self.response(Gtk.ResponseType.OK)
+
+	def get_result(self):
+		return self.result
+
+	def get_ports(self):
+		ports = serial.tools.list_ports.comports(include_links=False)
+		devices = []
+		for port in sorted(ports):
+			devices.append(port.device)
+		return devices
 		
 class Application(Gtk.Application):
 

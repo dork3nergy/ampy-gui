@@ -304,18 +304,17 @@ class AppWindow(Gtk.ApplicationWindow):
 		self.ampy_args[0]=port.get_text()
 		if self.check_for_device() != -1:
 			self.update_ampy_command()
-			if self.debug:
-				print("Port Changed")
+			self.debug_print("Port Changed")
 	def on_baud_change(self,baud):
 		selected = baud.get_active()
 		self.ampy_args[1]= self.baud_rates[selected]
 		self.update_ampy_command()
-		print("Baud Changed")
+		self.debug_print("Baud Changed")
 	def on_delay_change(self,delay):
 		value = delay.get_value()
 		self.ampy_args[2]=str(value)
 		self.update_ampy_command()
-		print("Delay Changed")
+		self.debug_print("Delay Changed")
 
 	def setup_local_tree_view(self, local_treeview):
 		column = Gtk.TreeViewColumn.new()

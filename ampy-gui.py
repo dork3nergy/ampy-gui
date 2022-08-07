@@ -474,14 +474,18 @@ class AppWindow(Gtk.ApplicationWindow):
 		else:
 			return 0
 			
-	def local_row_selected(self, local_treeview):
-		selected = local_treeview.get_selection()
-		model, iter = selected.get_selected()
-		if (iter is not None):
-			fname = model.get_value(iter, self.FILENAME)
-			return fname
+	def local_rows_selected(self, local_treeview):
+		tree_selection = local_treeview.get_selection()
+		model, paths = tree_selection.get_selected_rows()
+		if paths and len(paths) > 0:
+			files = []
+			for fpath in paths:
+				iterator = model.get_iter(fpath)
+				file = model.get_value(iterator, self.FILENAME)
+				files.append(file)
+			return files
 		else:
-			return 0
+			return None
 
 	def get_button_clicked(self,button, local_treeview, remote_treeview,terminal_buffer):
 		""" Retrieves a file from the remote device
@@ -512,25 +516,27 @@ class AppWindow(Gtk.ApplicationWindow):
 		"""
 		response = self.check_for_device()
 		if (response == 0):
-			file_selected = self.local_row_selected(local_treeview)
-			if file_selected == 0:
+			files_selected = self.local_rows_selected(local_treeview)
+			if files_selected is None or len(files_selected) > 0:
 				self.print_and_terminal(terminal_buffer,
 										"No file selected")
 				return
 			else:
-				source=self.current_local_path+'/'+file_selected
-				dest = self.current_remote_path+'/'+file_selected
+				for file in files_selected:
+					source = os.path.join(self.current_local_path, file)
+					dest = self.current_remote_path + '/' + file
 		
-				args=['put',source,dest]
-				output=subprocess.run(self.ampy_command+args,capture_output=True)
-				if output.returncode == 0:
-					self.populate_remote_tree_model(remote_treeview)
-					msg = "File '{}' successfully uploaded to device as '{}'".format(source, dest)
-					print(msg)
-					self.set_terminal_text(terminal_buffer, msg + "\n\n")
-				else:
-					self.print_and_terminal(terminal_buffer,
-											"Error uploading file from device: '{}'".format(output.stderr.decode("utf-8")))
+					args = ['put', source, dest]
+					output = subprocess.run(self.ampy_command + args, capture_output=True)
+					if output.returncode != 0:
+						self.print_and_terminal(terminal_buffer,
+												"Error uploading file from device: '{}'".format(output.stderr.decode("utf-8")))
+						return
+
+				self.populate_remote_tree_model(remote_treeview)
+				msg = "Files '{}' successfully uploaded to remote device".format(", ".join(files_selected))
+				self.print_and_terminal(terminal_buffer, msg)
+
 
 	def delete_button_clicked(self, button, remote_treeview, terminal_buffer):
 		""" Deletes a file from the remote device

@@ -286,8 +286,10 @@ class AppWindow(Gtk.ApplicationWindow):
 		self.delete_button.connect("clicked", self.delete_button_clicked, self.remote_treeview,terminal_buffer)
 
 		# Clear terminal button
+		hbox = Gtk.HBox()
 		clear_terminal_button = Gtk.Button.new_with_label("Clear terminal")
-		box_outer.pack_start(clear_terminal_button, False, False, 0)
+		hbox.pack_start(clear_terminal_button, False, False, 0)
+		box_outer.pack_start(hbox, False, False, 0)
 		clear_terminal_button.connect("clicked", self.clear_terminal, terminal_buffer)
 
 

@@ -318,7 +318,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
 	def connect_device(self, button, remote_treeview,terminal_buffer):
 		response = self.check_for_device()
-		if(response == 0):
+		if response == 0:
 			self.populate_remote_tree_model(remote_treeview)
 			self.print_and_terminal(terminal_buffer,
 									"Connected to device {}\nHello world!! :)".format(self.ampy_args[0]))
@@ -399,32 +399,31 @@ class AppWindow(Gtk.ApplicationWindow):
 		remote_treeview.set_model(remote_store)
 
 	def populate_local_tree_model(self, local_treeview):
+		# Build the tree path out of current_local_path.
 		store = local_treeview.get_model()
 		store.clear()
-		location = self.current_local_path
-		# Build the tree path out of current_local_path.
 
-		iter = store.append()
+		# Add the '..' directory
+		iterator = store.append()
 		pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
-		store.set(iter, self.ICON, pixbuf, self.FILENAME, "..")
+		store.set(iterator, self.ICON, pixbuf, self.FILENAME, "..")
 
 		# Parse through the directory, adding all of its contents to the model.
-
-		filelst = os.listdir(location)
+		filelst = os.listdir(self.current_local_path)
 		filelst.sort()
 		for file in filelst:
-			temp = location + "/" + file
+			temp = os.path.join(self.current_local_path, file)
 			if os.path.isdir(temp):
 				pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
-				iter = store.append()
-				store.set(iter, self.ICON, pixbuf, self.FILENAME, file)
+				iterator = store.append()
+				store.set(iterator, self.ICON, pixbuf, self.FILENAME, file)
 
 		for file in filelst:
-			temp = location + "/" + file
+			temp = os.path.join(self.current_local_path, file)
 			if os.path.isfile(temp):
 				pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "file.png"))
-				iter = store.append()
-				store.set(iter, self.ICON, pixbuf, self.FILENAME, file)
+				iterator = store.append()
+				store.set(iterator, self.ICON, pixbuf, self.FILENAME, file)
 
 		if self.put_button:
 			self.put_button.set_sensitive(False)
@@ -462,7 +461,7 @@ class AppWindow(Gtk.ApplicationWindow):
 			
 	def load_remote_directory(self,path):
 		response=self.check_for_device()
-		if (response == 0):
+		if response == 0:
 			args=['ls', path]
 			output=subprocess.run(self.ampy_command + args, capture_output=True)
 			if output.stderr.decode("utf-8") == "":
@@ -479,10 +478,10 @@ class AppWindow(Gtk.ApplicationWindow):
 			
 	def remote_row_selected(self, remote_treeview):
 		selected = remote_treeview.get_selection()
-		model, iter = selected.get_selected()
-		if(iter is not None):
-			fname = model.get_value(iter, self.FILENAME)
-			ftype = model.get_value(iter, self.TYPE)
+		model, iterator = selected.get_selected()
+		if iterator:
+			fname = model.get_value(iterator, self.FILENAME)
+			ftype = model.get_value(iterator, self.TYPE)
 			row_selected=(fname,ftype)
 			return row_selected
 		else:
@@ -505,7 +504,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		""" Retrieves a file from the remote device
 		"""
 		response=self.check_for_device()
-		if (response == 0):
+		if response == 0:
 			row_selected = self.remote_row_selected(remote_treeview)
 			if row_selected == 0:
 				self.print_and_terminal(terminal_buffer,
@@ -529,7 +528,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		""" Uploads a file to the remote device
 		"""
 		response = self.check_for_device()
-		if (response == 0):
+		if response == 0:
 			files_selected = self.local_rows_selected(local_treeview)
 			if files_selected is None or len(files_selected) > 0:
 				self.print_and_terminal(terminal_buffer,
@@ -556,7 +555,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		""" Deletes a file from the remote device
 		"""
 		response = self.check_for_device()
-		if (response == 0):
+		if response == 0:
 			row_selected = self.remote_row_selected(remote_treeview)
 			if row_selected == 0:
 				return
@@ -595,7 +594,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		""" Removes a directory on the remote device.
 		"""
 		response = self.check_for_device()
-		if (response == 0):
+		if response == 0:
 			row_selected = self.remote_row_selected(remote_treeview)
 			if row_selected == 0:
 				return
@@ -632,7 +631,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		""" Creates a new directory on the remote device.
 		"""
 		response=self.check_for_device()
-		if (response == 0):
+		if response == 0:
 			dirname = ''
 			dialog=PopUp(self)
 			response = dialog.run()
@@ -640,7 +639,7 @@ class AppWindow(Gtk.ApplicationWindow):
 			if response == Gtk.ResponseType.OK:
 				dirname = dialog.get_result()
 			dialog.destroy()
-			if (dirname != ''):
+			if dirname != '':
 				args=['mkdir',self.current_remote_path+'/'+dirname]
 				output=subprocess.run(self.ampy_command+args,capture_output=True)
 				if output.returncode == 0:
@@ -654,7 +653,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		""" Performs a soft reset/reboot of the remote device.
 		"""
 		response=self.check_for_device()
-		if (response == 0):
+		if response == 0:
 			args=['reset']
 			output=subprocess.run(self.ampy_command+args,capture_output=True)
 			if output.returncode == 0:
@@ -667,7 +666,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
 	def run_local_button_clicked(self, button, local_treeview, terminal_buffer):
 		response = self.check_for_device()
-		if (response == 0):
+		if response == 0:
 			row_selected = self.remote_row_selected(local_treeview)
 			if row_selected == 0:
 				return
@@ -690,7 +689,7 @@ class AppWindow(Gtk.ApplicationWindow):
 	def run_remote_button_clicked(self,button, remote_treeview, terminal_buffer):
 		# TODO: the ampy 'run' command only runs files from your local computer, not from the remote device (as this function is trying to achieve)
 		response=self.check_for_device()
-		if (response == 0):
+		if response == 0:
 			row_selected = self.remote_row_selected(remote_treeview)
 			if row_selected == 0:
 				return
@@ -776,17 +775,17 @@ class AppWindow(Gtk.ApplicationWindow):
 
 	def on_remote_row_selected(self, tree_selection):
 		response = self.check_for_device()
-		if (response == 0):
+		if response == 0:
 			model, iterator = tree_selection.get_selected()
 			if iterator:
 				fname = model.get_value(iterator, self.FILENAME)
 				ftype = model.get_value(iterator, self.TYPE)
 
-				if (fname == ".."):
+				if fname == "..":
 					self.deactivate_remote_file_buttons()
 					self.deactivate_remote_directory_buttons()
 				else:
-					if (ftype == 'd'):
+					if ftype == 'd':
 						self.activate_remote_file_buttons()
 						self.deactivate_remote_directory_buttons()
 					else:
@@ -798,22 +797,22 @@ class AppWindow(Gtk.ApplicationWindow):
 
 	def on_remote_row_activated(self, remote_treeview, fpath, column):
 		response=self.check_for_device()
-		if (response == 0):
+		if response == 0:
 			model = remote_treeview.get_model()
-			iter = model.get_iter(fpath)
-			if iter:
-				fname = model.get_value(iter, self.FILENAME)
-				ftype = model.get_value(iter, self.TYPE)
+			iterator = model.get_iter(fpath)
+			if iterator:
+				fname = model.get_value(iterator, self.FILENAME)
+				ftype = model.get_value(iterator, self.TYPE)
 				
 
 				location = self.current_remote_path  + '/' + fname
 				
-				if(fname == ".."):
+				if fname == "..":
 					head,tail = os.path.split(self.current_remote_path)
 					self.current_remote_path = head
 					self.populate_remote_tree_model(remote_treeview)
 				else:
-					if(ftype == 'd'):
+					if ftype == 'd':
 						self.current_remote_path=location
 						self.populate_remote_tree_model(remote_treeview)
 
@@ -821,8 +820,8 @@ class AppWindow(Gtk.ApplicationWindow):
 
 		textbuffer.delete(textbuffer.get_start_iter(), textbuffer.get_end_iter())
 	def set_terminal_text(self,textbuffer,inString):
-		end_iter = textbuffer.get_end_iter()
-		textbuffer.insert(end_iter, ">>> " + inString)
+		end_iterator = textbuffer.get_end_iterator()
+		textbuffer.insert(end_iterator, ">>> " + inString)
 
 	def debug_print(self, inString):
 		if self.debug:
@@ -837,7 +836,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
 	def refresh_remote(self,button, remote_treeview):
 		response=self.check_for_device()
-		if (response == 0):
+		if response == 0:
 			self.populate_remote_tree_model(remote_treeview)
 
 class Warning(Gtk.Dialog):
@@ -941,14 +940,14 @@ class SelectPortPopUp(Gtk.Dialog):
 		remote_store.clear()
 
 		for port in ports:
-			iter = remote_store.append()
-			remote_store.set(iter, 0, port)
+			iterator = remote_store.append()
+			remote_store.set(iterator, 0, port)
 
 	def on_response(self, widget, response_id):
 		selected = self.treeview.get_selection()
-		model, iter = selected.get_selected()
-		if (iter is not None):
-			self.result = model.get_value(iter, 0)
+		model, iterator = selected.get_selected()
+		if iterator:
+			self.result = model.get_value(iterator, 0)
 		else:
 			self.result = None
 

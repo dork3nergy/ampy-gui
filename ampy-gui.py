@@ -9,8 +9,19 @@ from gi.repository import Gdk
 from ampy.pyboard import PyboardError
 import subprocess
 import serial.tools.list_ports
+from enum import Enum
+
+
+class MsgType(Enum):
+	""" Different message type options for the terminal window, and the corresponding color of the terminal text.
+	"""
+	INFO = "#45ffc1"
+	WARNING = "#eb9f4d"
+	ERROR = "#f5805f"
 
 class AppWindow(Gtk.ApplicationWindow):
+	debug = False
+
 	local_treeview = None
 	remote_treeview = None
 
@@ -321,7 +332,8 @@ class AppWindow(Gtk.ApplicationWindow):
 		if response == 0:
 			self.populate_remote_tree_model(remote_treeview)
 			self.print_and_terminal(terminal_buffer,
-									"Connected to device {}\nHello world!! :)".format(self.ampy_args[0]))
+									"Connected to device {}\nHello world!! :)".format(self.ampy_args[0]),
+									MsgType.INFO)
 
 	def update_ampy_command(self):
 		self.ampy_command = ['ampy', '--port', self.ampy_args[0], '--baud',self.ampy_args[1], '--delay',self.ampy_args[2]]
@@ -508,7 +520,8 @@ class AppWindow(Gtk.ApplicationWindow):
 			row_selected = self.remote_row_selected(remote_treeview)
 			if row_selected == 0:
 				self.print_and_terminal(terminal_buffer,
-										"No file selected")
+										"No file selected",
+										MsgType.WARNING)
 				return
 			else:
 				fname,ftype = row_selected
@@ -519,10 +532,12 @@ class AppWindow(Gtk.ApplicationWindow):
 					if output.returncode == 0:
 						self.populate_local_tree_model(local_treeview)
 						self.print_and_terminal(terminal_buffer,
-												"File '{}' successfully fetched from device".format(fname))
+												"File '{}' successfully fetched from device".format(fname),
+												MsgType.INFO)
 					else:
 						self.print_and_terminal(terminal_buffer,
-												"Error fetching file from device: '{}'".format(output.stderr.decode("utf-8")))
+												"Error fetching file from device: '{}'".format(output.stderr.decode("utf-8"),
+																							   MsgType.ERROR))
 
 	def put_button_clicked(self, button, local_treeview, remote_treeview, terminal_buffer):
 		""" Uploads a file to the remote device
@@ -532,7 +547,7 @@ class AppWindow(Gtk.ApplicationWindow):
 			files_selected = self.local_rows_selected(local_treeview)
 			if files_selected is None or len(files_selected) > 0:
 				self.print_and_terminal(terminal_buffer,
-										"No file selected")
+										"No file selected", MsgType.WARNING)
 				return
 			else:
 				for file in files_selected:
@@ -543,12 +558,13 @@ class AppWindow(Gtk.ApplicationWindow):
 					output = subprocess.run(self.ampy_command + args, capture_output=True)
 					if output.returncode != 0:
 						self.print_and_terminal(terminal_buffer,
-												"Error uploading file from device: '{}'".format(output.stderr.decode("utf-8")))
+												"Error uploading file from device: '{}'".format(output.stderr.decode("utf-8")),
+												MsgType.ERROR)
 						return
 
 				self.populate_remote_tree_model(remote_treeview)
 				msg = "Files '{}' successfully uploaded to remote device".format(", ".join(files_selected))
-				self.print_and_terminal(terminal_buffer, msg)
+				self.print_and_terminal(terminal_buffer, msg, MsgType.INFO)
 
 
 	def delete_button_clicked(self, button, remote_treeview, terminal_buffer):
@@ -584,11 +600,12 @@ class AppWindow(Gtk.ApplicationWindow):
 					if output.returncode == 0:
 						self.populate_remote_tree_model(remote_treeview)
 						self.print_and_terminal(terminal_buffer,
-												"File '{}' successfully deleted from device".format(fname))
+												"File '{}' successfully deleted from device".format(fname),
+												MsgType.INFO)
 					else:
 						error = output.stderr.decode("UTF-8")
 						index=error.find("RuntimeError:")
-						self.set_terminal_text(terminal_buffer,error[index:]+"\n\n")
+						self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
 
 	def rmdir_button_clicked(self, button, remote_treeview, terminal_buffer):
 		""" Removes a directory on the remote device.
@@ -625,7 +642,7 @@ class AppWindow(Gtk.ApplicationWindow):
 					else:
 						error = output.stderr.decode("UTF-8")
 						index=error.find("RuntimeError:")
-						self.set_terminal_text(terminal_buffer,error[index:]+"\n\n")
+						self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
 					
 	def mkdir_button_clicked(self,button, remote_treeview, terminal_buffer):
 		""" Creates a new directory on the remote device.
@@ -647,7 +664,7 @@ class AppWindow(Gtk.ApplicationWindow):
 				else:
 					error = output.stderr.decode("UTF-8")
 					index=error.find("RuntimeError:")
-					self.set_terminal_text(terminal_buffer,error[index:]+"\n\n")
+					self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
 
 	def reset_button_clicked(self,button, remote_treeview,terminal_buffer):
 		""" Performs a soft reset/reboot of the remote device.
@@ -662,7 +679,7 @@ class AppWindow(Gtk.ApplicationWindow):
 			else:
 				error = output.stderr.decode("UTF-8")
 				index=error.find("RuntimeError:")
-				self.set_terminal_text(terminal_buffer,error[index:]+"\n\n")
+				self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
 
 	def run_local_button_clicked(self, button, local_treeview, terminal_buffer):
 		response = self.check_for_device()
@@ -678,13 +695,13 @@ class AppWindow(Gtk.ApplicationWindow):
 					args=['run', usepath]
 					output=subprocess.run(self.ampy_command + args, capture_output=True)
 					if output.returncode == 0:
-						self.set_terminal_text(terminal_buffer,"---------Run Output---------\n")
-						self.set_terminal_text(terminal_buffer,output.stdout.decode("UTF-8")+"\n")
-						self.set_terminal_text(terminal_buffer,"----------------------------\n")
+						self.print_and_terminal(terminal_buffer,"---------Run Output---------", MsgType.INFO)
+						self.print_and_terminal(terminal_buffer,output.stdout.decode("UTF-8"), MsgType.INFO)
+						self.print_and_terminal(terminal_buffer,"----------------------------", MsgType.INFO)
 					else:
 						error = output.stderr.decode("UTF-8")
 						index=error.find("RuntimeError:")
-						self.set_terminal_text(terminal_buffer,error[index:]+"\n\n")
+						self.print_and_terminal(terminal_buffer,error[index:]+"\n\n")
 
 	def run_remote_button_clicked(self,button, remote_treeview, terminal_buffer):
 		# TODO: the ampy 'run' command only runs files from your local computer, not from the remote device (as this function is trying to achieve)
@@ -701,13 +718,13 @@ class AppWindow(Gtk.ApplicationWindow):
 					args=['run',usepath]
 					output=subprocess.run(self.ampy_command+args,capture_output=True)
 					if output.returncode == 0:
-						self.set_terminal_text(terminal_buffer,"---------Run Output---------\n")
-						self.set_terminal_text(terminal_buffer,output.stdout.decode("UTF-8")+"\n")
-						self.set_terminal_text(terminal_buffer,"----------------------------\n")
+						self.print_and_terminal(terminal_buffer,"---------Run Output---------", MsgType.INFO)
+						self.print_and_terminal(terminal_buffer,output.stdout.decode("UTF-8"), MsgType.INFO)
+						self.print_and_terminal(terminal_buffer,"----------------------------", MsgType.INFO)
 					else:
 						error = output.stderr.decode("UTF-8")
 						index=error.find("RuntimeError:")
-						self.set_terminal_text(terminal_buffer,error[index:]+"\n\n")
+						self.print_and_terminal(terminal_buffer,error[index:], MsgType.ERROR)
 
 	def on_local_row_selected(self, tree_selection):
 		model, paths = tree_selection.get_selected_rows()
@@ -819,17 +836,17 @@ class AppWindow(Gtk.ApplicationWindow):
 	def clear_terminal(self, button, textbuffer):
 
 		textbuffer.delete(textbuffer.get_start_iter(), textbuffer.get_end_iter())
-	def set_terminal_text(self,textbuffer,inString):
-		end_iterator = textbuffer.get_end_iterator()
-		textbuffer.insert(end_iterator, ">>> " + inString)
+	def set_terminal_text(self,textbuffer, inString, msgType: MsgType):
+		end_iterator = textbuffer.get_end_iter()
+		textbuffer.insert_markup(end_iterator, "<span color='{}'>>>> {}</span>".format(msgType.value, inString), -1)
 
 	def debug_print(self, inString):
 		if self.debug:
 			print(inString)
 
-	def print_and_terminal(self, textbuffer, inString):
+	def print_and_terminal(self, textbuffer, inString, msgType = MsgType.INFO):
 		self.debug_print(inString)
-		self.set_terminal_text(textbuffer, inString + "\n\n")
+		self.set_terminal_text(textbuffer, inString + "\n", msgType)
 
 	def refresh_local(self, button,local_treeview):
 		self.populate_local_tree_model(local_treeview)

@@ -145,6 +145,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
 		# CREATE LOCAL TREEVIEW
 		self.local_treeview = Gtk.TreeView.new()
+		self.local_treeview.get_selection().set_mode(Gtk.SelectionMode.MULTIPLE)
 		
 		self.setup_local_tree_view(self.local_treeview)
 		self.setup_local_tree_model(self.local_treeview)
@@ -690,14 +691,21 @@ class AppWindow(Gtk.ApplicationWindow):
 						self.set_terminal_text(terminal_buffer,error[index:]+"\n\n")
 
 	def on_local_row_selected(self, tree_selection):
-		model, iterator = tree_selection.get_selected()
-		if iterator:
+		model, paths = tree_selection.get_selected_rows()
+		if paths and len(paths) > 0:
 			self.put_button.set_sensitive(True)
-			fname = model.get_value(iterator, self.FILENAME)
-			if os.path.isfile(os.path.join(self.current_local_path, fname)):
-				self.run_local_button.set_sensitive(True)
-			else:
-				self.run_local_button.set_sensitive(False)
+			all_files = True	# Checks whether only files are selected
+			for fpath in paths:
+				iterator = model.get_iter(fpath)
+				file = model.get_value(iterator, self.FILENAME)
+				if file == "..":
+					all_files = False
+					self.put_button.set_sensitive(False)
+					break
+				elif os.path.isdir(os.path.join(self.current_local_path, file)):
+					all_files = False
+					break
+			self.run_local_button.set_sensitive(all_files)
 		else:
 			self.put_button.set_sensitive(False)
 			self.run_local_button.set_sensitive(False)

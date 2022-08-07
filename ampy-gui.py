@@ -209,6 +209,8 @@ class AppWindow(Gtk.ApplicationWindow):
 		self.put_button = Gtk.Button.new_with_label(">> PUT >>")
 		self.get_button.set_sensitive(False)
 		self.put_button.set_sensitive(False)
+		self.get_button.set_tooltip_text("Download the selected remote file to the local device.")
+		self.put_button.set_tooltip_text("Upload the selected local file to the remote device.")
 
 		putget_box.pack_start(self.get_button,False,False,0)
 		putget_box.pack_start(self.put_button,False,False,0)
@@ -228,6 +230,12 @@ class AppWindow(Gtk.ApplicationWindow):
 		self.run_remote_button.set_sensitive(False)
 		self.reset_button.set_sensitive(False)
 		self.delete_button.set_sensitive(False)
+
+		self.mkdir_button.set_tooltip_text("Create a new directory on the remote device.")
+		self.rmdir_button.set_tooltip_text("Remove the selected directory from the remote device.")
+		self.run_remote_button.set_tooltip_text("Run the selected remote file on the remote device.")
+		self.reset_button.set_tooltip_text("Perform a soft reset/reboot of the remote device.")
+		self.delete_button.set_tooltip_text("Delete the selected file from the remote device.")
 
 		remote_buttons_box.pack_start(self.mkdir_button,False,False,0)
 		remote_buttons_box.pack_start(self.rmdir_button,False,False,0)

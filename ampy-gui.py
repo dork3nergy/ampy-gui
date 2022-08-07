@@ -97,13 +97,11 @@ class AppWindow(Gtk.ApplicationWindow):
 		delay_spin = Gtk.SpinButton.new_with_range(0, 10, 0.1)
 		
 		#LOAD BAUD RATES INTO COMBO BOX
-		i=0
-		while i < len(self.baud_rates):
-			baud_button.append_text(self.baud_rates[i])
-			i +=1
+		for baud_rate in self.baud_rates:
+			baud_button.append_text(baud_rate)
 	
 		baud_button.set_active(11)
-		delay_spin.set_digits(0)
+		delay_spin.set_digits(1)
 		port_entry.set_text(self.ampy_args[0])
 
 		#SET EVENT TRIGGERS for SETTINGS

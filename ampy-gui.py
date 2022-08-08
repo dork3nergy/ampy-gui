@@ -10,6 +10,7 @@ from ampy.pyboard import PyboardError
 import subprocess
 import serial.tools.list_ports
 from enum import Enum
+import glob
 
 
 class MsgType(Enum):
@@ -276,20 +277,20 @@ class AppWindow(Gtk.ApplicationWindow):
 		terminal_window.set_homogeneous(False)
 		box_outer.pack_start(terminal_window,True, True,6)
 		
-		terminal_view = Gtk.TextView()
-		terminal_buffer = terminal_view.get_buffer()
+		self.terminal_view = Gtk.TextView()
+		terminal_buffer = self.terminal_view.get_buffer()
 
 		#MAKE TERMINAL READ ONLY
-		terminal_view.set_property('editable',False)
-		terminal_view.set_property('cursor-visible',False)
+		self.terminal_view.set_property('editable',False)
+		self.terminal_view.set_property('cursor-visible',False)
 
 		terminal_scroll = Gtk.ScrolledWindow()
-		terminal_scroll.add(terminal_view)
+		terminal_scroll.add(self.terminal_view)
 		terminal_window.pack_start(terminal_scroll,True,True,6)
 
 		# TIE ACTIONS TO BUTTONS
 		select_port_button.connect("clicked", self.select_port_popup, port_entry)
-		connect_button.connect("clicked", self.connect_device, self.remote_treeview,terminal_buffer)
+		connect_button.connect("clicked", self.connect_device, self.remote_treeview, self.terminal_view, terminal_buffer)
 		self.put_button.connect("clicked", self.put_button_clicked, self.local_treeview, self.remote_treeview,terminal_buffer)
 		self.get_button.connect("clicked", self.get_button_clicked, self.local_treeview, self.remote_treeview,terminal_buffer)
 		self.run_local_button.connect("clicked", self.run_local_button_clicked, self.local_treeview, terminal_buffer)
@@ -327,7 +328,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		else:
 			dialog.destroy()
 
-	def connect_device(self, button, remote_treeview,terminal_buffer):
+	def connect_device(self, button, remote_treeview, terminal_view, terminal_buffer):
 		response = self.check_for_device()
 		if response == 0:
 			self.populate_remote_tree_model(remote_treeview)
@@ -443,25 +444,77 @@ class AppWindow(Gtk.ApplicationWindow):
 	def populate_remote_tree_model(self, remote_treeview):
 		remote_store = remote_treeview.get_model()
 		remote_store.clear()
-		nondirs = []
-		#Add .. to directory
-		iter = remote_store.append()
-		pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
-		remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, "..",self.TYPE,'d')
-		filelist=self.load_remote_directory(self.current_remote_path)
-		for f in filelist:
-			if self.is_remote_dir(self.current_remote_path+'/'+f):
-				iter = remote_store.append()
-				pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
-				isdir = 'd'
-				remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, f,self.TYPE, isdir)
-			else:
-				nondirs.append(f)
-		for f in range(len(nondirs)):
-			iter = remote_store.append()
-			pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "file.png"))
-			remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, nondirs[f],self.TYPE,'f')
 
+		# Add '..' to directory
+		iterator = remote_store.append()
+		pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
+		remote_store.set(iterator, self.ICON, pixbuf,self.FILENAME, "..",self.TYPE,'d')
+
+		if self.current_remote_path == "":
+			# Much faster method, but only works for the root directory...
+
+			## Fetch the files
+			files = None
+			run_file = os.path.join(
+				os.path.join(self.current_local_path, "util", "print_files.py"))
+			args = ['run', run_file]
+			output = subprocess.run(self.ampy_command + args, capture_output=True)
+			if output.returncode == 0:
+				files = output.stdout.decode("UTF-8").split("\n")
+				files.sort()		# Make sure the files are sorted alphabetically
+			else:
+				error = output.stderr.decode("UTF-8")
+				index = error.find("RuntimeError:")
+				self.debug_print(error[index:])
+
+			## Fetch the directories
+			directories = None
+			run_file = os.path.join(
+				os.path.join(self.current_local_path, "util", "print_directories.py"))
+			args = ['run', run_file]
+			output = subprocess.run(self.ampy_command + args, capture_output=True)
+			if output.returncode == 0:
+				directories = output.stdout.decode("UTF-8").split("\n")
+				directories.sort()		# Make sure the directories are sorted alphabetically
+			else:
+				error = output.stderr.decode("UTF-8")
+				index = error.find("RuntimeError:")
+				self.debug_print(error[index:])
+
+			# Add the directories and files to the treeview
+			if directories and len(directories) > 0:
+				for d in directories:
+					if d == '': continue
+					iterator = remote_store.append()
+					pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
+					remote_store.set(iterator, self.ICON, pixbuf, self.FILENAME, d, self.TYPE, 'd')
+			if files and len(files) > 0:
+				for f in files:
+					if f == '': continue
+					iterator = remote_store.append()
+					pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "file.png"))
+					remote_store.set(iterator, self.ICON, pixbuf, self.FILENAME, f, self.TYPE, 'f')
+		else:
+			# Much slower method, but works for sub-directories of root...
+
+			## Get all the files and directories from remote
+			nondirs = []
+			filelist=self.load_remote_directory(self.current_remote_path)
+			for f in filelist:
+				if self.is_remote_dir(self.current_remote_path+'/'+f):
+					iter = remote_store.append()
+					pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
+					isdir = 'd'
+					remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, f,self.TYPE, isdir)
+				else:
+					nondirs.append(f)
+			for f in range(len(nondirs)):
+				iter = remote_store.append()
+				pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "file.png"))
+				remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, nondirs[f],self.TYPE,'f')
+
+		self.deactivate_remote_file_buttons()
+		self.deactivate_remote_directory_buttons()
 
 	def is_remote_dir(self, path):
 		args=['ls',path]
@@ -684,24 +737,23 @@ class AppWindow(Gtk.ApplicationWindow):
 	def run_local_button_clicked(self, button, local_treeview, terminal_buffer):
 		response = self.check_for_device()
 		if response == 0:
-			row_selected = self.remote_row_selected(local_treeview)
-			if row_selected == 0:
+			rows_selected = self.local_rows_selected(local_treeview)
+			if rows_selected is None or len(rows_selected) == 0:
 				return
 			else:
-				fname, ftype = row_selected
-				if ftype == 'f':
-					usepath = os.path.join(self.current_local_path, fname)
-
-					args=['run', usepath]
-					output=subprocess.run(self.ampy_command + args, capture_output=True)
-					if output.returncode == 0:
-						self.print_and_terminal(terminal_buffer,"---------Run Output---------", MsgType.INFO)
-						self.print_and_terminal(terminal_buffer,output.stdout.decode("UTF-8"), MsgType.INFO)
-						self.print_and_terminal(terminal_buffer,"----------------------------", MsgType.INFO)
-					else:
-						error = output.stderr.decode("UTF-8")
-						index=error.find("RuntimeError:")
-						self.print_and_terminal(terminal_buffer,error[index:]+"\n\n")
+				for row_selected in rows_selected:
+					usepath = os.path.join(self.current_local_path, row_selected)
+					if os.path.isfile(usepath):
+						args=['run', usepath]
+						output=subprocess.run(self.ampy_command + args, capture_output=True)
+						if output.returncode == 0:
+							self.print_and_terminal(terminal_buffer,"---------Running local file {}---------".format(row_selected), MsgType.INFO)
+							self.print_and_terminal(terminal_buffer,output.stdout.decode("UTF-8"), MsgType.INFO)
+							self.print_and_terminal(terminal_buffer,"----------------------------", MsgType.INFO)
+						else:
+							error = output.stderr.decode("UTF-8")
+							index = error.find("RuntimeError:")
+							self.print_and_terminal(terminal_buffer, error[index:] , MsgType.ERROR)
 
 	def run_remote_button_clicked(self,button, remote_treeview, terminal_buffer):
 		# TODO: the ampy 'run' command only runs files from your local computer, not from the remote device (as this function is trying to achieve)
@@ -975,7 +1027,9 @@ class SelectPortPopUp(Gtk.Dialog):
 		return self.result
 
 	def get_ports(self):
-		ports = serial.tools.list_ports.comports(include_links=False)
+		if sys.platform.startswith('darwin'):
+			return glob.glob('/dev/tty.*')
+		ports = serial.tools.list_ports.comports(include_links=True)
 		devices = []
 		for port in sorted(ports):
 			devices.append(port.device)

@@ -859,6 +859,7 @@ class AppWindow(Gtk.ApplicationWindow):
 			self.run_remote_button.set_sensitive(False)
 	def enable_remote_file_buttons(self, value: bool):
 		self.get_button.set_sensitive(value)
+		self.run_remote_button.set_sensitive(value)
 		self.delete_button.set_sensitive(value)
 
 	def enable_remote_directory_buttons(self, value: bool):

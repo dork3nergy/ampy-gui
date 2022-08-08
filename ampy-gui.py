@@ -589,7 +589,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		else:
 			return None
 
-	def get_button_clicked(self,button, local_treeview, remote_treeview,terminal_buffer):
+	def get_button_clicked(self,button, local_treeview, remote_treeview, terminal_buffer):
 		""" Retrieves a file from the remote device
 		"""
 		response=self.check_for_device()
@@ -605,17 +605,21 @@ class AppWindow(Gtk.ApplicationWindow):
 					fname, ftype = row_selected
 					if ftype == 'f':
 						os.chdir(self.current_local_path)
-						args=['get',fname, os.path.join(self.current_local_path, fname)]
-						output=subprocess.run(self.ampy_command+args,capture_output=True)
-						if output.returncode == 0:
-							self.populate_local_tree_model(local_treeview)
-							self.print_and_terminal(terminal_buffer,
-													"File '{}' successfully fetched from device".format(fname),
-													MsgType.INFO)
-						else:
-							self.print_and_terminal(terminal_buffer,
-													"Error fetching file from device: '{}'".format(output.stderr.decode("utf-8"),
-																								   MsgType.ERROR))
+						self.get_file(local_treeview, terminal_buffer, fname, os.path.join(self.current_local_path, fname))
+
+	def get_file(self, local_treeview, terminal_buffer, src_remote_file, dest_local_file):
+		args = ['get', src_remote_file, dest_local_file]
+		output = subprocess.run(self.ampy_command + args, capture_output=True)
+		if output.returncode == 0:
+			if local_treeview:
+				self.populate_local_tree_model(local_treeview)
+			self.print_and_terminal(terminal_buffer,
+									"File '{}' successfully fetched from device".format(src_remote_file),
+									MsgType.INFO)
+		else:
+			self.print_and_terminal(terminal_buffer,
+									"Error fetching file from device: '{}'".format(output.stderr.decode("utf-8"),
+																				   MsgType.ERROR))
 
 	def put_button_clicked(self, button, local_treeview, remote_treeview, terminal_buffer):
 		""" Uploads a file to the remote device
@@ -771,19 +775,22 @@ class AppWindow(Gtk.ApplicationWindow):
 				for row_selected in rows_selected:
 					usepath = os.path.join(self.current_local_path, row_selected)
 					if os.path.isfile(usepath):
-						args=['run', usepath]
-						output=subprocess.run(self.ampy_command + args, capture_output=True)
-						if output.returncode == 0:
-							self.print_and_terminal(terminal_buffer,"---------Running local file {}---------".format(row_selected), MsgType.INFO)
-							self.print_and_terminal(terminal_buffer,output.stdout.decode("UTF-8"), MsgType.INFO)
-							self.print_and_terminal(terminal_buffer,"----------------------------", MsgType.INFO)
-						else:
-							error = output.stderr.decode("UTF-8")
-							index = error.find("RuntimeError:")
-							self.print_and_terminal(terminal_buffer, error[index:] , MsgType.ERROR)
+						self.run_local_file(usepath, terminal_buffer)
+
+	def run_local_file(self, local_path, terminal_buffer):
+		args = ['run', local_path]
+		output = subprocess.run(self.ampy_command + args, capture_output=True)
+		if output.returncode == 0:
+			self.print_and_terminal(terminal_buffer, "---------Running local file {}---------".format(os.path.basename(local_path)),
+									MsgType.INFO)
+			self.print_and_terminal(terminal_buffer, output.stdout.decode("UTF-8"), MsgType.INFO)
+			self.print_and_terminal(terminal_buffer, "----------------------------", MsgType.INFO)
+		else:
+			error = output.stderr.decode("UTF-8")
+			index = error.find("RuntimeError:")
+			self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
 
 	def run_remote_button_clicked(self,button, remote_treeview, terminal_buffer):
-		# TODO: the ampy 'run' command only runs files from your local computer, not from the remote device (as this function is trying to achieve)
 		response=self.check_for_device()
 		if response == 0:
 			rows_selected = self.remote_rows_selected(remote_treeview)
@@ -793,18 +800,13 @@ class AppWindow(Gtk.ApplicationWindow):
 				for row_selected in rows_selected:
 					fname,ftype = row_selected
 					if ftype == 'f':
-						usepath = self.current_remote_path +'/'+fname
+						usepath = self.current_remote_path +'/' + fname
 
-						args=['run',usepath]
-						output=subprocess.run(self.ampy_command+args,capture_output=True)
-						if output.returncode == 0:
-							self.print_and_terminal(terminal_buffer,"---------Run Output---------", MsgType.INFO)
-							self.print_and_terminal(terminal_buffer,output.stdout.decode("UTF-8"), MsgType.INFO)
-							self.print_and_terminal(terminal_buffer,"----------------------------", MsgType.INFO)
-						else:
-							error = output.stderr.decode("UTF-8")
-							index=error.find("RuntimeError:")
-							self.print_and_terminal(terminal_buffer,error[index:], MsgType.ERROR)
+						# Fetch the file to be run from the remote device as a temp file, run that local temp file, then delete the temp file
+						tmp_file = os.path.join(self.progpath, "tmp", fname)
+						self.get_file(None, terminal_buffer, usepath, tmp_file)
+						self.run_local_file(tmp_file, terminal_buffer)
+						os.remove(tmp_file)
 
 	def on_local_row_selected(self, tree_selection):
 		model, paths = tree_selection.get_selected_rows()

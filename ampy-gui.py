@@ -454,41 +454,19 @@ class AppWindow(Gtk.ApplicationWindow):
 			# Much faster method, but only works for the root directory...
 
 			## Fetch the files
-			files = None
-			run_file = os.path.join(
-				os.path.join(self.current_local_path, "util", "print_files.py"))
-			args = ['run', run_file]
-			output = subprocess.run(self.ampy_command + args, capture_output=True)
-			if output.returncode == 0:
-				files = output.stdout.decode("UTF-8").split("\n")
-				files.sort()		# Make sure the files are sorted alphabetically
-			else:
-				error = output.stderr.decode("UTF-8")
-				index = error.find("RuntimeError:")
-				self.debug_print(error[index:])
+			files = self.load_remote_root_files()
 
 			## Fetch the directories
-			directories = None
-			run_file = os.path.join(
-				os.path.join(self.current_local_path, "util", "print_directories.py"))
-			args = ['run', run_file]
-			output = subprocess.run(self.ampy_command + args, capture_output=True)
-			if output.returncode == 0:
-				directories = output.stdout.decode("UTF-8").split("\n")
-				directories.sort()		# Make sure the directories are sorted alphabetically
-			else:
-				error = output.stderr.decode("UTF-8")
-				index = error.find("RuntimeError:")
-				self.debug_print(error[index:])
+			directories = self.load_remote_root_directories()
 
 			# Add the directories and files to the treeview
-			if directories and len(directories) > 0:
+			if directories:
 				for d in directories:
 					if d == '': continue
 					iterator = remote_store.append()
 					pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
 					remote_store.set(iterator, self.ICON, pixbuf, self.FILENAME, d, self.TYPE, 'd')
-			if files and len(files) > 0:
+			if files:
 				for f in files:
 					if f == '': continue
 					iterator = remote_store.append()
@@ -523,7 +501,47 @@ class AppWindow(Gtk.ApplicationWindow):
 			return True
 		else:
 			return False
-			
+
+	def load_remote_root_files(self):
+		""" Returns an array of files in the root directory of the remote device by running a python script to the device.
+		This method is much faster than running the 'ls' command and then parsing every file to check whether it is
+		a file or a directory...
+		"""
+		files = None
+		run_file = os.path.join(
+			os.path.join(self.progpath, "util", "print_files.py"))
+		args = ['run', run_file]
+		output = subprocess.run(self.ampy_command + args, capture_output=True)
+		if output.returncode == 0:
+			files = output.stdout.decode("UTF-8").split("\n")
+			files.sort()  # Make sure the files are sorted alphabetically
+		else:
+			error = output.stderr.decode("UTF-8")
+			index = error.find("RuntimeError:")
+			self.debug_print(error[index:])
+
+		return files
+
+	def load_remote_root_directories(self):
+		""" Returns an array of directories in the root directory of the remote device by running a python script to the device.
+		This method is much faster than running the 'ls' command and then parsing every file to check whether it is
+		a file or a directory...
+		"""
+		directories = None
+		run_file = os.path.join(
+			os.path.join(self.progpath, "util", "print_directories.py"))
+		args = ['run', run_file]
+		output = subprocess.run(self.ampy_command + args, capture_output=True)
+		if output.returncode == 0:
+			directories = output.stdout.decode("UTF-8").split("\n")
+			directories.sort()  # Make sure the directories are sorted alphabetically
+		else:
+			error = output.stderr.decode("UTF-8")
+			index = error.find("RuntimeError:")
+			self.debug_print(error[index:])
+
+		return directories
+
 	def load_remote_directory(self,path):
 		response=self.check_for_device()
 		if response == 0:
@@ -580,7 +598,7 @@ class AppWindow(Gtk.ApplicationWindow):
 				fname,ftype = row_selected
 				if ftype == 'f':
 					os.chdir(self.current_local_path)
-					args=['get',fname,self.current_local_path+'/'+fname]
+					args=['get',fname, os.path.join(self.current_local_path, fname)]
 					output=subprocess.run(self.ampy_command+args,capture_output=True)
 					if output.returncode == 0:
 						self.populate_local_tree_model(local_treeview)

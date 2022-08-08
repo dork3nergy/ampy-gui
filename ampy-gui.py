@@ -343,14 +343,14 @@ class AppWindow(Gtk.ApplicationWindow):
 	def check_for_device(self):
 		try:
 			os.stat(self.ampy_args[0])
-			self.activate_remote_buttons()
+			self.enable_remote_buttons(True)
 			return 0
 		except (OSError, PyboardError):
 			dialog = Warning(self,
 							 "Can't Find Your Remote Device '{}'\nCheck the Port Settings".format(self.ampy_args[0]))
 			dialog.run()
 			dialog.destroy()
-			self.deactivate_remote_buttons()
+			self.enable_remote_buttons(False)
 			return -1
 		
 	def on_port_change(self,port,event):
@@ -492,8 +492,8 @@ class AppWindow(Gtk.ApplicationWindow):
 				pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "file.png"))
 				remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, nondirs[f],self.TYPE,'f')
 
-		self.deactivate_remote_file_buttons()
-		self.deactivate_remote_directory_buttons()
+		self.enable_remote_file_buttons(False)
+		self.enable_remote_directory_buttons(False)
 
 	def is_remote_dir(self, path):
 		args=['ls',path]
@@ -842,35 +842,27 @@ class AppWindow(Gtk.ApplicationWindow):
 				self.current_local_path = location
 				self.populate_local_tree_model(local_treeview)
 
-	def deactivate_remote_buttons(self):
-		self.remote_refresh_button.set_sensitive(False)
-		self.get_button.set_sensitive(False)
-		self.mkdir_button.set_sensitive(False)
-		self.rmdir_button.set_sensitive(False)
-		self.delete_button.set_sensitive(False)
-		self.reset_button.set_sensitive(False)
-		self.run_remote_button.set_sensitive(False)
+	def enable_remote_buttons(self, value: bool):
+		if value:
+			# The other buttons need a file or directory to be selected first
+			self.remote_refresh_button.set_sensitive(True)
+			self.mkdir_button.set_sensitive(True)
+			self.reset_button.set_sensitive(True)
+			self.run_remote_button.set_sensitive(True)
+		else:
+			self.remote_refresh_button.set_sensitive(False)
+			self.get_button.set_sensitive(False)
+			self.mkdir_button.set_sensitive(False)
+			self.rmdir_button.set_sensitive(False)
+			self.delete_button.set_sensitive(False)
+			self.reset_button.set_sensitive(False)
+			self.run_remote_button.set_sensitive(False)
+	def enable_remote_file_buttons(self, value: bool):
+		self.get_button.set_sensitive(value)
+		self.delete_button.set_sensitive(value)
 
-	def activate_remote_buttons(self):
-		# The other buttons need a file or directory to be selected first
-		self.remote_refresh_button.set_sensitive(True)
-		self.mkdir_button.set_sensitive(True)
-		self.reset_button.set_sensitive(True)
-		self.run_remote_button.set_sensitive(True)
-
-	def activate_remote_file_buttons(self):
-		self.get_button.set_sensitive(True)
-		self.delete_button.set_sensitive(True)
-
-	def deactivate_remote_file_buttons(self):
-		self.get_button.set_sensitive(False)
-		self.delete_button.set_sensitive(False)
-
-	def activate_remote_directory_buttons(self):
-		self.rmdir_button.set_sensitive(True)
-
-	def deactivate_remote_directory_buttons(self):
-		self.rmdir_button.set_sensitive(False)
+	def enable_remote_directory_buttons(self, value: bool):
+		self.rmdir_button.set_sensitive(value)
 
 	def on_remote_row_selected(self, tree_selection):
 		response = self.check_for_device()
@@ -891,17 +883,17 @@ class AppWindow(Gtk.ApplicationWindow):
 					only_files_selected = False
 
 			if only_files_selected:
-				self.activate_remote_file_buttons()
-				self.deactivate_remote_directory_buttons()
+				self.enable_remote_file_buttons(True)
+				self.enable_remote_directory_buttons(False)
 			elif only_dirs_selected:
-				self.activate_remote_directory_buttons()
-				self.deactivate_remote_file_buttons()
+				self.enable_remote_directory_buttons(True)
+				self.enable_remote_file_buttons(False)
 			else:
-				self.deactivate_remote_file_buttons()
-				self.deactivate_remote_directory_buttons()
+				self.enable_remote_file_buttons(False)
+				self.enable_remote_directory_buttons(False)
 		else:
-			self.deactivate_remote_file_buttons()
-			self.deactivate_remote_directory_buttons()
+			self.enable_remote_file_buttons(False)
+			self.enable_remote_directory_buttons(False)
 
 	def on_remote_row_activated(self, remote_treeview, fpath, column):
 		response=self.check_for_device()

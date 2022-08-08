@@ -797,6 +797,9 @@ class AppWindow(Gtk.ApplicationWindow):
 			if rows_selected is None or len(rows_selected) == 0:
 				return
 			else:
+				# Check if tmp dir exists, if not, create it
+				if not os.path.exists(os.path.join(self.progpath, "tmp")):
+					os.mkdir(os.path.join(self.progpath, "tmp"))
 				for row_selected in rows_selected:
 					fname,ftype = row_selected
 					if ftype == 'f':

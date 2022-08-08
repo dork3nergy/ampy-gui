@@ -565,7 +565,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		if iterator:
 			fname = model.get_value(iterator, self.FILENAME)
 			ftype = model.get_value(iterator, self.TYPE)
-			row_selected=(fname,ftype)
+			row_selected=(fname.strip(), ftype)
 			return row_selected
 		else:
 			return 0
@@ -647,7 +647,7 @@ class AppWindow(Gtk.ApplicationWindow):
 			if row_selected == 0:
 				return
 			else:
-				fname,ftype = row_selected
+				fname, ftype = row_selected
 				if ftype == 'f':
 					# Confirmation dialog
 					msg = "Are you sure you want to delete the file '{}' from the device?".format(fname)
@@ -666,8 +666,8 @@ class AppWindow(Gtk.ApplicationWindow):
 						self.debug_print("File deletion canceled")
 						return
 
-					args=['rm',self.current_remote_path+'/'+fname]
-					output=subprocess.run(self.ampy_command+args,capture_output=True)
+					args=['rm', self.current_remote_path+'/'+fname]
+					output=subprocess.run(self.ampy_command + args, capture_output=True)
 					if output.returncode == 0:
 						self.populate_remote_tree_model(remote_treeview)
 						self.print_and_terminal(terminal_buffer,
@@ -675,7 +675,7 @@ class AppWindow(Gtk.ApplicationWindow):
 												MsgType.INFO)
 					else:
 						error = output.stderr.decode("UTF-8")
-						index=error.find("RuntimeError:")
+						index = error.find("RuntimeError:")
 						self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
 
 	def rmdir_button_clicked(self, button, remote_treeview, terminal_buffer):
@@ -904,7 +904,6 @@ class AppWindow(Gtk.ApplicationWindow):
 						self.populate_remote_tree_model(remote_treeview)
 
 	def clear_terminal(self, button, textbuffer):
-
 		textbuffer.delete(textbuffer.get_start_iter(), textbuffer.get_end_iter())
 	def set_terminal_text(self,textbuffer, inString, msgType: MsgType):
 		end_iterator = textbuffer.get_end_iter()

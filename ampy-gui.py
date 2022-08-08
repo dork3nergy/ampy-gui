@@ -872,7 +872,7 @@ class AppWindow(Gtk.ApplicationWindow):
 					self.deactivate_remote_file_buttons()
 					self.deactivate_remote_directory_buttons()
 				else:
-					if ftype == 'd':
+					if ftype == 'f':
 						self.activate_remote_file_buttons()
 						self.deactivate_remote_directory_buttons()
 					else:

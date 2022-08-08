@@ -616,7 +616,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		response = self.check_for_device()
 		if response == 0:
 			files_selected = self.local_rows_selected(local_treeview)
-			if files_selected is None or len(files_selected) > 0:
+			if files_selected is None or len(files_selected) == 0:
 				self.print_and_terminal(terminal_buffer,
 										"No file selected", MsgType.WARNING)
 				return

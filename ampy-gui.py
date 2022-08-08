@@ -71,6 +71,10 @@ class AppWindow(Gtk.ApplicationWindow):
 				background-color:#b2b2b2;
 				padding:12px;
 			}
+			#small_button_padding {
+				padding-left:0px;
+				padding-right:0px;
+			}
 			"""
 
 		
@@ -184,13 +188,28 @@ class AppWindow(Gtk.ApplicationWindow):
 		
 		#ADD TREEVIEWS TO SCROLLED WINDOWS
 		local_scrolled_win.add(self.local_treeview)
-
 		local_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6,halign="fill")
 		local_box.pack_start(local_scrolled_win,True,True,0)
+
+		local_button_box = Gtk.HBox()
+
+		## Local directory chooser button
+		local_dir_chooser_button = Gtk.Button.new_with_label("Select Directory")
+		local_dir_chooser_button.set_name("small_button_padding")
+		local_dir_chooser_button.set_tooltip_text("Select the root directory of the local machine")
+		local_dir_chooser_button.set_margin_end(4)
+		local_dir_chooser_button.connect("clicked", self.on_local_dir_chooser_button_clicked, self.local_treeview)
+
+		## Local refresh button
 		local_refresh_button = Gtk.Button.new_with_label("Refresh")
+		local_refresh_button.set_name("small_button_padding")
 		local_refresh_button.set_tooltip_text("Refresh the file list of the local device.")
+		local_refresh_button.set_margin_start(4)
 		local_refresh_button.connect("clicked", self.refresh_local, self.local_treeview)
-		local_box.pack_start(local_refresh_button,False,False,0)
+
+		local_button_box.pack_start(local_dir_chooser_button, True, True, 0)
+		local_button_box.pack_start(local_refresh_button, True, True, 0)
+		local_box.pack_start(local_button_box, False, False, 0)
 
 		remote_scrolled_win.add(self.remote_treeview)
 
@@ -439,6 +458,8 @@ class AppWindow(Gtk.ApplicationWindow):
 				iterator = store.append()
 				store.set(iterator, self.ICON, pixbuf, self.FILENAME, file)
 
+		local_treeview.columns_autosize()
+
 		if self.put_button:
 			self.put_button.set_sensitive(False)
 
@@ -491,6 +512,8 @@ class AppWindow(Gtk.ApplicationWindow):
 				iter = remote_store.append()
 				pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "file.png"))
 				remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, nondirs[f],self.TYPE,'f')
+
+		remote_treeview.columns_autosize()
 
 		self.enable_remote_file_buttons(False)
 		self.enable_remote_directory_buttons(False)
@@ -941,6 +964,22 @@ class AppWindow(Gtk.ApplicationWindow):
 		response=self.check_for_device()
 		if response == 0:
 			self.populate_remote_tree_model(remote_treeview)
+
+	def on_local_dir_chooser_button_clicked(self, button, local_treeview):
+		dialog = Gtk.FileChooserDialog(title="Please choose the local parent directory", parent=self,
+									   action=Gtk.FileChooserAction.SELECT_FOLDER)
+		dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+										Gtk.STOCK_OPEN, Gtk.ResponseType.OK)
+
+		response = dialog.run()
+		if response == Gtk.ResponseType.OK:
+			dir = dialog.get_filename()
+			self.current_local_path = dir
+			self.populate_local_tree_model(local_treeview)
+
+		dialog.destroy()
+		# self.labelframe.set_label(os.path.basename(file_path))
+		# self.editor.open_file(file_path)
 
 class Warning(Gtk.Dialog):
 	def __init__(self,parent,msg):

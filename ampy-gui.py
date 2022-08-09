@@ -1130,5 +1130,12 @@ class Application(Gtk.Application):
 		self.window.debug = self.debug
 
 if __name__ == "__main__":
+	# Before anything, check if ampy is installed
+	try:
+		subprocess.run(["ampy", "--help"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+	except FileNotFoundError:
+		print("Error: Adafruit ampy is not installed. Please install it and try again.")
+		sys.exit(1)
+
 	app = Application()
 	app.run()

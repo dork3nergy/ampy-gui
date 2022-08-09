@@ -88,7 +88,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
 		# Load settings from a configuration file
 		config = configparser.ConfigParser()
-		config.read('config.ini')
+		config.read(os.path.join(self.progpath, 'config.ini'))
 		try:
 			self.ampy_args = [config['DEFAULT']['port'], config['DEFAULT']['baud'], config['DEFAULT']['delay']]
 		except KeyError:

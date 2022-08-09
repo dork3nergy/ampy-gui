@@ -9,12 +9,23 @@ The default baud setting of 115200 seems to be the only baud setting the works w
 
 Any errors are also displayed in the scrollbox.
 
+Prerequisites:
+- make sure Adafruit ampy is installed: https://learn.adafruit.com/micropython-basics-load-files-and-run-code/install-ampy
+- make sure Gtk is installed: https://pygobject.readthedocs.io/en/latest/getting_started.html
+
 USAGE:
-python3 ./ampy-gui.py
+python3 ampy-gui.py
+
+To also print debug messages to your local terminal, run with:
+python3 ampy-gui.py debug
 
 Instructions:
 - Plug in your device
 - Set your port and optionally the baud rate and delay.
 - Hit connect
+
+Troubleshooting:
+- I can connect to my device (including the 'Hello world' message), but don't see any files.
+  - If you're running Linux, take a look at this page for help: https://github.com/scientifichackers/ampy/issues/9
 
 ![Alt text](screenshot.png?raw=true "Screenshot")

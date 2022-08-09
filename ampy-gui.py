@@ -349,8 +349,10 @@ class AppWindow(Gtk.ApplicationWindow):
 			dialog.destroy()
 
 	def connect_device(self, button, remote_treeview, terminal_view, terminal_buffer):
+		self.debug_print("Connecting to device...")
 		response = self.check_for_device()
 		if response == 0:
+			self.debug_print("Connected")
 			self.populate_remote_tree_model(remote_treeview)
 			self.print_and_terminal(terminal_buffer,
 									"Connected to device {}\nHello world!! :)".format(self.ampy_args[0]),
@@ -432,6 +434,8 @@ class AppWindow(Gtk.ApplicationWindow):
 		remote_treeview.set_model(remote_store)
 
 	def populate_local_tree_model(self, local_treeview):
+		self.debug_print("Populating local tree model")
+
 		# Build the tree path out of current_local_path.
 		store = local_treeview.get_model()
 		store.clear()
@@ -464,6 +468,8 @@ class AppWindow(Gtk.ApplicationWindow):
 			self.put_button.set_sensitive(False)
 
 	def populate_remote_tree_model(self, remote_treeview):
+		self.debug_print("Populating remote tree model")
+
 		remote_store = remote_treeview.get_model()
 		remote_store.clear()
 
@@ -477,9 +483,11 @@ class AppWindow(Gtk.ApplicationWindow):
 
 			## Fetch the files
 			files = self.load_remote_root_files()
+			self.debug_print(f"Remote files fetched: {str(files)}")
 
 			## Fetch the directories
 			directories = self.load_remote_root_directories()
+			self.debug_print(f"Remote directories fetched: {str(directories)}")
 
 			# Add the directories and files to the treeview
 			if directories:
@@ -975,6 +983,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		if response == Gtk.ResponseType.OK:
 			dir = dialog.get_filename()
 			self.current_local_path = dir
+			self.debug_print(f"Switched to new local directory: {dir}")
 			self.populate_local_tree_model(local_treeview)
 
 		dialog.destroy()

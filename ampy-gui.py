@@ -987,8 +987,6 @@ class AppWindow(Gtk.ApplicationWindow):
 			self.populate_local_tree_model(local_treeview)
 
 		dialog.destroy()
-		# self.labelframe.set_label(os.path.basename(file_path))
-		# self.editor.open_file(file_path)
 
 class Warning(Gtk.Dialog):
 	def __init__(self,parent,msg):

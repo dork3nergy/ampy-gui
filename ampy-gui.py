@@ -67,6 +67,7 @@ class AppWindow(Gtk.ApplicationWindow):
 			textview.view {
 				padding-left:4px;
 				background-color:black;
+				font: 14px "";
 			}
 			frame {
 				background-color:#b2b2b2;

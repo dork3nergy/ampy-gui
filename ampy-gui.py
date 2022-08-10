@@ -389,7 +389,9 @@ class AppWindow(Gtk.ApplicationWindow):
 				return 0
 		except serial.SerialException as ex:
 			dialog = Warning(self,
-							 "Can't Find Your Remote Device '{}'\nCheck the Port Settings".format(self.ampy_args[0]))
+							 "Can't find your remote device '{}'\n\n"
+							 "Check the port settings or whether\n"
+							 "the port is in use in another program.".format(self.ampy_args[0]))
 			dialog.run()
 			dialog.destroy()
 			self.clear_remote_tree_view(self.remote_treeview)
@@ -1050,8 +1052,7 @@ class Warning(Gtk.Dialog):
 
 		self.add_button(Gtk.STOCK_OK, Gtk.ResponseType.OK)
 
-
-		self.set_default_size(300,50)
+		self.set_default_size(400,100)
 		self.set_decorated(False)
 		self.set_border_width(2)
 

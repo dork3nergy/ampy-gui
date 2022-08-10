@@ -4,8 +4,9 @@ import sys, os
 import configparser
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, GObject, GdkPixbuf
-from gi.repository import Gdk
+gi.require_version('Vte', '2.91')
+from gi.repository import Gtk, GObject, GdkPixbuf, Vte
+from gi.repository import Gdk, GLib
 from ampy.pyboard import PyboardError
 import subprocess
 import serial.tools.list_ports
@@ -327,6 +328,24 @@ class AppWindow(Gtk.ApplicationWindow):
 		box_outer.pack_start(hbox, False, False, 0)
 		clear_terminal_button.connect("clicked", self.clear_terminal, terminal_buffer)
 
+		self.repl_terminal = Vte.Terminal()
+		self.repl_terminal.set_audible_bell(False)
+		self.repl_terminal.set_scrollback_lines(150)
+		self.repl_terminal.spawn_async(
+			Vte.PtyFlags.DEFAULT,  # Pty Flags
+			os.environ['HOME'],  # Working DIR
+			["/bin/bash"],  # Command/BIN (argv)
+			None,  # Environmental Variables (envv)
+			GLib.SpawnFlags.DEFAULT,  # Spawn Flags
+			None, None,  # Child Setup
+			-1,  # Timeout (-1 for indefinitely)
+			None,  # Cancellable
+			None,  # Callback
+			None  # User Data
+		)
+
+		box_outer.pack_start(self.repl_terminal, True, True, 0)
+
 
 		#SET FOCUS TO LOCAL FILELIST
 		self.local_treeview.grab_focus()
@@ -483,7 +502,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
 			## Fetch the files
 			files = self.load_remote_root_files()
-			self.debug_print(f"Remote files fetched: {str(files)}")
+			self.debug_print(f"Remote file(s) fetched: {str(files)}")
 
 			## Fetch the directories
 			directories = self.load_remote_root_directories()
@@ -676,7 +695,7 @@ class AppWindow(Gtk.ApplicationWindow):
 						return
 
 				self.populate_remote_tree_model(remote_treeview)
-				msg = "Files '{}' successfully uploaded to remote device".format(", ".join(files_selected))
+				msg = "File(s) '{}' successfully uploaded to remote device".format(", ".join(files_selected))
 				self.print_and_terminal(terminal_buffer, msg, MsgType.INFO)
 
 
@@ -689,37 +708,43 @@ class AppWindow(Gtk.ApplicationWindow):
 			if rows_selected is None or len(rows_selected) == 0:
 				return
 			else:
+				if len(rows_selected) == 1:
+					msg = "Are you sure you want to delete '{}'?".format(rows_selected[0][0])
+				else:
+					msg = "Are you sure you want to delete these {} files?".format(len(rows_selected))
+				# Confirmation dialog
+				dialog = Gtk.MessageDialog(
+					transient_for=self,
+					flags=0,
+					message_type=Gtk.MessageType.QUESTION,
+					buttons=Gtk.ButtonsType.YES_NO,
+					text=msg,
+				)
+				dialog.set_decorated(False)
+				response = dialog.run()
+				dialog.destroy()
+
+				if response == Gtk.ResponseType.NO:
+					self.debug_print("File deletion canceled")
+					return
+
 				for row_selected in rows_selected:
 					fname, ftype = row_selected
 					if ftype == 'f':
-						# Confirmation dialog
-						msg = "Are you sure you want to delete the file '{}' from the device?".format(fname)
-						dialog = Gtk.MessageDialog(
-							transient_for=self,
-							flags=0,
-							message_type=Gtk.MessageType.QUESTION,
-							buttons=Gtk.ButtonsType.YES_NO,
-							text=msg,
-						)
-						dialog.set_decorated(False)
-						response = dialog.run()
-						dialog.destroy()
-
-						if response == Gtk.ResponseType.NO:
-							self.debug_print("File deletion canceled")
-							return
-
 						args=['rm', self.current_remote_path+'/'+fname]
 						output=subprocess.run(self.ampy_command + args, capture_output=True)
-						if output.returncode == 0:
-							self.populate_remote_tree_model(remote_treeview)
-							self.print_and_terminal(terminal_buffer,
-													"File '{}' successfully deleted from device".format(fname),
-													MsgType.INFO)
-						else:
+						if output.returncode != 0:
 							error = output.stderr.decode("UTF-8")
 							index = error.find("RuntimeError:")
 							self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
+
+				# File deletion done
+				if len(rows_selected) == 1:
+					msg = "File '{}' successfully deleted from device".format(rows_selected[0][0])
+				else:
+					msg = "{} files successfully deleted from device".format(len(rows_selected))
+				self.populate_remote_tree_model(remote_treeview)
+				self.print_and_terminal(terminal_buffer, msg, MsgType.INFO)
 
 	def rmdir_button_clicked(self, button, remote_treeview, terminal_buffer):
 		""" Removes a directory on the remote device.
@@ -953,9 +978,15 @@ class AppWindow(Gtk.ApplicationWindow):
 
 	def clear_terminal(self, button, textbuffer):
 		textbuffer.delete(textbuffer.get_start_iter(), textbuffer.get_end_iter())
+		self.run_repl_terminal_command("echo 'Hello world'")
+		self.run_repl_terminal_command("python\nimport replit\nreplit.clear()")
+
 	def set_terminal_text(self,textbuffer, inString, msgType: MsgType):
 		end_iterator = textbuffer.get_end_iter()
 		textbuffer.insert_markup(end_iterator, "<span color='{}'>>>> {}</span>".format(msgType.value, inString), -1)
+
+	def run_repl_terminal_command(self, command):
+		self.repl_terminal.feed_child(str.encode(command + "\n"))
 
 	def debug_print(self, inString):
 		if self.debug:

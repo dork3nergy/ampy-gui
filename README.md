@@ -26,6 +26,7 @@ Instructions:
 
 Troubleshooting:
 - I can connect to my device (including the 'Hello world' message), but don't see any files.
+  - Make sure you're not connected to the serial port in any other application (e.g. another serial terminal program)
   - If you're running Linux, take a look at this page for help: https://github.com/scientifichackers/ampy/issues/9
 
 ![Alt text](screenshot.png?raw=true "Screenshot")

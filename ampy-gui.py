@@ -328,7 +328,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		box_outer.pack_start(hbox, False, False, 0)
 		clear_terminal_button.connect("clicked", self.clear_terminal, terminal_buffer)
 
-		self.repl_terminal = Vte.Terminal()
+		'''self.repl_terminal = Vte.Terminal()
 		self.repl_terminal.set_audible_bell(False)
 		self.repl_terminal.set_scrollback_lines(150)
 		self.repl_terminal.spawn_async(
@@ -344,7 +344,7 @@ class AppWindow(Gtk.ApplicationWindow):
 			None  # User Data
 		)
 
-		box_outer.pack_start(self.repl_terminal, True, True, 0)
+		box_outer.pack_start(self.repl_terminal, True, True, 0)'''
 
 
 		#SET FOCUS TO LOCAL FILELIST
@@ -992,8 +992,8 @@ class AppWindow(Gtk.ApplicationWindow):
 
 	def clear_terminal(self, button, textbuffer):
 		textbuffer.delete(textbuffer.get_start_iter(), textbuffer.get_end_iter())
-		self.run_repl_terminal_command("echo 'Hello world'")
-		self.run_repl_terminal_command("python\nimport replit\nreplit.clear()")
+		#self.run_repl_terminal_command("echo 'Hello world'")
+		#self.run_repl_terminal_command("python\nimport replit\nreplit.clear()")
 
 	def set_terminal_text(self,textbuffer, inString, msgType: MsgType):
 		end_iterator = textbuffer.get_end_iter()

@@ -383,10 +383,11 @@ class AppWindow(Gtk.ApplicationWindow):
 
 	def check_for_device(self):
 		try:
-			os.stat(self.ampy_args[0])
-			self.enable_remote_buttons(True)
-			return 0
-		except (OSError, PyboardError):
+			port = serial.Serial(port=self.ampy_args[0])
+			if port.isOpen():
+				self.enable_remote_buttons(True)
+				return 0
+		except serial.SerialException as ex:
 			dialog = Warning(self,
 							 "Can't Find Your Remote Device '{}'\nCheck the Port Settings".format(self.ampy_args[0]))
 			dialog.run()

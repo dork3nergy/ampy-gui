@@ -390,6 +390,7 @@ class AppWindow(Gtk.ApplicationWindow):
 							 "Can't Find Your Remote Device '{}'\nCheck the Port Settings".format(self.ampy_args[0]))
 			dialog.run()
 			dialog.destroy()
+			self.clear_remote_tree_view(self.remote_treeview)
 			self.enable_remote_buttons(False)
 			return -1
 		
@@ -441,6 +442,9 @@ class AppWindow(Gtk.ApplicationWindow):
 		renderer.set_visible(False)
   
 		remote_treeview.append_column(column)
+
+	def clear_remote_tree_view(self, remote_treeview):
+		remote_treeview.get_model().clear()
 
 	def setup_local_tree_model(self, local_treeview):
 		local_store = Gtk.ListStore(GdkPixbuf.Pixbuf, GObject.TYPE_STRING)

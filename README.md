@@ -13,11 +13,15 @@ Prerequisites:
 - make sure Adafruit ampy is installed: https://learn.adafruit.com/micropython-basics-load-files-and-run-code/install-ampy
 - make sure Gtk is installed: https://pygobject.readthedocs.io/en/latest/getting_started.html
 
-USAGE:
-python3 ampy-gui.py
+USAGE (run in terminal):
+`python3 ampy-gui.py`
+
+If you start the script from another directory than this root directory, ampy-gui will open the local tree view in 
+the directory that you ran the command in. E.g. you're in directory `user/mydir` and run `python3 user/Downloads/ampy-gui.py`,
+the tree view will open in `user/mydir`.
 
 To also print debug messages to your local terminal, run with:
-python3 ampy-gui.py debug
+`python3 ampy-gui.py debug`
 
 Instructions:
 - Plug in your device

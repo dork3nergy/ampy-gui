@@ -742,7 +742,10 @@ class AppWindow(Gtk.ApplicationWindow):
 				if len(rows_selected) == 1:
 					msg = "File '{}' successfully deleted from device".format(rows_selected[0][0])
 				else:
-					msg = "{} files successfully deleted from device".format(len(rows_selected))
+					files = rows_selected[0][0]
+					for i in range(1, len(rows_selected)):
+						files += ", {}".format(rows_selected[i][0])
+					msg = "Files '{}' successfully deleted from device".format(files)
 				self.populate_remote_tree_model(remote_treeview)
 				self.print_and_terminal(terminal_buffer, msg, MsgType.INFO)
 
@@ -755,34 +758,45 @@ class AppWindow(Gtk.ApplicationWindow):
 			if rows_selected is None or len(rows_selected) == 0:
 				return
 			else:
+				if len(rows_selected) == 1:
+					msg = "Are you sure you want to delete the directory '{}'?".format(rows_selected[0][0])
+				else:
+					msg = "Are you sure you want to delete {} directories?".format(len(rows_selected))
+				# Confirmation dialog
+				dialog = Gtk.MessageDialog(
+					transient_for=self,
+					flags=0,
+					message_type=Gtk.MessageType.QUESTION,
+					buttons=Gtk.ButtonsType.YES_NO,
+					text=msg,
+				)
+				dialog.set_decorated(False)
+				response = dialog.run()
+				dialog.destroy()
+
+				if response == Gtk.ResponseType.NO:
+					self.debug_print("Directory deletion canceled")
+					return
+
 				for row_selected in rows_selected:
 					fname,ftype = row_selected
-					if ftype == 'd':
-						# Confirmation dialog
-						msg = "Are you sure you want to delete the directory '{}' from the device?".format(fname)
-						dialog = Gtk.MessageDialog(
-							transient_for=self,
-							flags=0,
-							message_type=Gtk.MessageType.QUESTION,
-							buttons=Gtk.ButtonsType.YES_NO,
-							text=msg,
-						)
-						dialog.set_decorated(False)
-						response = dialog.run()
-						dialog.destroy()
+					args=['rmdir',self.current_remote_path+'/'+fname]
+					output=subprocess.run(self.ampy_command+args,capture_output=True)
+					if output.returncode != 0:
+						error = output.stderr.decode("UTF-8")
+						index=error.find("RuntimeError:")
+						self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
 
-						if response == Gtk.ResponseType.NO:
-							self.debug_print("Directory deletion canceled")
-							return
-
-						args=['rmdir',self.current_remote_path+'/'+fname]
-						output=subprocess.run(self.ampy_command+args,capture_output=True)
-						if output.returncode == 0:
-							self.populate_remote_tree_model(remote_treeview)
-						else:
-							error = output.stderr.decode("UTF-8")
-							index=error.find("RuntimeError:")
-							self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
+				# Directory deletion done
+				if len(rows_selected) == 1:
+					msg = "Directory '{}' successfully deleted from device".format(rows_selected[0][0])
+				else:
+					dirs = rows_selected[0][0]
+					for i in range(1, len(rows_selected)):
+						dirs += ", {}".format(rows_selected[i][0])
+					msg = "Directories '{}' successfully deleted from device".format(dirs)
+				self.populate_remote_tree_model(remote_treeview)
+				self.print_and_terminal(terminal_buffer, msg, MsgType.INFO)
 					
 	def mkdir_button_clicked(self,button, remote_treeview, terminal_buffer):
 		""" Creates a new directory on the remote device.

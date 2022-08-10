@@ -470,7 +470,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
 		# Parse through the directory, adding all of its contents to the model.
 		filelst = os.listdir(self.current_local_path)
-		filelst.sort()
+		filelst.sort(key=lambda v: (v.upper(), v[0].islower()))
 		for file in filelst:
 			temp = os.path.join(self.current_local_path, file)
 			if os.path.isdir(temp):
@@ -569,7 +569,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		output = subprocess.run(self.ampy_command + args, capture_output=True)
 		if output.returncode == 0:
 			files = output.stdout.decode("UTF-8").split("\n")
-			files.sort()  # Make sure the files are sorted alphabetically
+			files.sort(key=lambda v: (v.upper(), v[0].islower()))  # Make sure the files are sorted alphabetically
 		else:
 			error = output.stderr.decode("UTF-8")
 			index = error.find("RuntimeError:")
@@ -589,7 +589,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		output = subprocess.run(self.ampy_command + args, capture_output=True)
 		if output.returncode == 0:
 			directories = output.stdout.decode("UTF-8").split("\n")
-			directories.sort()  # Make sure the directories are sorted alphabetically
+			directories.sort(key=lambda v: (v.upper(), v[0].islower()))  # Make sure the directories are sorted alphabetically
 		else:
 			error = output.stderr.decode("UTF-8")
 			index = error.find("RuntimeError:")
@@ -699,6 +699,7 @@ class AppWindow(Gtk.ApplicationWindow):
 												"Error uploading file from device: '{}'".format(output.stderr.decode("utf-8")),
 												MsgType.ERROR)
 						return
+					self.debug_print("File '{}' successfully uploaded to device".format(file))
 
 				self.populate_remote_tree_model(remote_treeview)
 				msg = "File(s) '{}' successfully uploaded to remote device".format(", ".join(files_selected))

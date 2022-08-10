@@ -992,11 +992,11 @@ class AppWindow(Gtk.ApplicationWindow):
 				
 				if fname == "..":
 					head,tail = os.path.split(self.current_remote_path)
-					self.current_remote_path = head
+					self.current_remote_path = head.strip()
 					self.populate_remote_tree_model(remote_treeview)
 				else:
 					if ftype == 'd':
-						self.current_remote_path=location
+						self.current_remote_path = location.strip()
 						self.populate_remote_tree_model(remote_treeview)
 
 	def clear_terminal(self, button, textbuffer):

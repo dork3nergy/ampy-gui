@@ -4,9 +4,8 @@ import sys, os
 import configparser
 import gi
 gi.require_version('Gtk', '3.0')
-gi.require_version('Vte', '2.91')
-from gi.repository import Gtk, GObject, GdkPixbuf, Vte
-from gi.repository import Gdk, GLib
+from gi.repository import Gtk, GObject, GdkPixbuf
+from gi.repository import Gdk
 from ampy.pyboard import PyboardError
 import subprocess
 import serial.tools.list_ports
@@ -328,24 +327,6 @@ class AppWindow(Gtk.ApplicationWindow):
 		hbox.pack_start(clear_terminal_button, False, False, 0)
 		box_outer.pack_start(hbox, False, False, 0)
 		clear_terminal_button.connect("clicked", self.clear_terminal, terminal_buffer)
-
-		'''self.repl_terminal = Vte.Terminal()
-		self.repl_terminal.set_audible_bell(False)
-		self.repl_terminal.set_scrollback_lines(150)
-		self.repl_terminal.spawn_async(
-			Vte.PtyFlags.DEFAULT,  # Pty Flags
-			os.environ['HOME'],  # Working DIR
-			["/bin/bash"],  # Command/BIN (argv)
-			None,  # Environmental Variables (envv)
-			GLib.SpawnFlags.DEFAULT,  # Spawn Flags
-			None, None,  # Child Setup
-			-1,  # Timeout (-1 for indefinitely)
-			None,  # Cancellable
-			None,  # Callback
-			None  # User Data
-		)
-
-		box_outer.pack_start(self.repl_terminal, True, True, 0)'''
 
 
 		#SET FOCUS TO LOCAL FILELIST
@@ -1005,15 +986,10 @@ class AppWindow(Gtk.ApplicationWindow):
 
 	def clear_terminal(self, button, textbuffer):
 		textbuffer.delete(textbuffer.get_start_iter(), textbuffer.get_end_iter())
-		#self.run_repl_terminal_command("echo 'Hello world'")
-		#self.run_repl_terminal_command("python\nimport replit\nreplit.clear()")
 
 	def set_terminal_text(self,textbuffer, inString,  msgType: MsgType):
 		end_iterator = textbuffer.get_end_iter()
 		textbuffer.insert_markup(end_iterator, "<span color='{}'>>>> {}</span>".format(msgType.value, inString), -1)
-
-	def run_repl_terminal_command(self, command):
-		self.repl_terminal.feed_child(str.encode(command + "\n"))
 
 	def debug_print(self, inString):
 		if self.debug:

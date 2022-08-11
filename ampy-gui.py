@@ -66,6 +66,7 @@ class AppWindow(Gtk.ApplicationWindow):
 			textview.view {
 				padding-left:4px;
 				background-color:black;
+				font: 14px "";
 			}
 			frame {
 				background-color:#b2b2b2;
@@ -88,7 +89,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
 		# Load settings from a configuration file
 		config = configparser.ConfigParser()
-		config.read('config.ini')
+		config.read(os.path.join(self.progpath, 'config.ini'))
 		try:
 			self.ampy_args = [config['DEFAULT']['port'], config['DEFAULT']['baud'], config['DEFAULT']['delay']]
 		except KeyError:
@@ -349,8 +350,10 @@ class AppWindow(Gtk.ApplicationWindow):
 			dialog.destroy()
 
 	def connect_device(self, button, remote_treeview, terminal_view, terminal_buffer):
+		self.debug_print("Connecting to device...")
 		response = self.check_for_device()
 		if response == 0:
+			self.debug_print("Connected")
 			self.populate_remote_tree_model(remote_treeview)
 			self.print_and_terminal(terminal_buffer,
 									"Connected to device {}\nHello world!! :)".format(self.ampy_args[0]),
@@ -361,14 +364,18 @@ class AppWindow(Gtk.ApplicationWindow):
 
 	def check_for_device(self):
 		try:
-			os.stat(self.ampy_args[0])
-			self.enable_remote_buttons(True)
-			return 0
-		except (OSError, PyboardError):
+			port = serial.Serial(port=self.ampy_args[0])
+			if port.isOpen():
+				self.enable_remote_buttons(True)
+				return 0
+		except serial.SerialException as ex:
 			dialog = Warning(self,
-							 "Can't Find Your Remote Device '{}'\nCheck the Port Settings".format(self.ampy_args[0]))
+							 "Can't find your remote device '{}'\n\n"
+							 "Check the port settings or whether\n"
+							 "the port is in use in another program.".format(self.ampy_args[0]))
 			dialog.run()
 			dialog.destroy()
+			self.clear_remote_tree_view(self.remote_treeview)
 			self.enable_remote_buttons(False)
 			return -1
 		
@@ -421,6 +428,9 @@ class AppWindow(Gtk.ApplicationWindow):
   
 		remote_treeview.append_column(column)
 
+	def clear_remote_tree_view(self, remote_treeview):
+		remote_treeview.get_model().clear()
+
 	def setup_local_tree_model(self, local_treeview):
 		local_store = Gtk.ListStore(GdkPixbuf.Pixbuf, GObject.TYPE_STRING)
 		local_treeview.set_model(local_store)
@@ -432,6 +442,8 @@ class AppWindow(Gtk.ApplicationWindow):
 		remote_treeview.set_model(remote_store)
 
 	def populate_local_tree_model(self, local_treeview):
+		self.debug_print("Populating local tree model")
+
 		# Build the tree path out of current_local_path.
 		store = local_treeview.get_model()
 		store.clear()
@@ -443,7 +455,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
 		# Parse through the directory, adding all of its contents to the model.
 		filelst = os.listdir(self.current_local_path)
-		filelst.sort()
+		filelst.sort(key=lambda v: (v.upper(), v))
 		for file in filelst:
 			temp = os.path.join(self.current_local_path, file)
 			if os.path.isdir(temp):
@@ -464,6 +476,8 @@ class AppWindow(Gtk.ApplicationWindow):
 			self.put_button.set_sensitive(False)
 
 	def populate_remote_tree_model(self, remote_treeview):
+		self.debug_print("Populating remote tree model")
+
 		remote_store = remote_treeview.get_model()
 		remote_store.clear()
 
@@ -477,9 +491,11 @@ class AppWindow(Gtk.ApplicationWindow):
 
 			## Fetch the files
 			files = self.load_remote_root_files()
+			self.debug_print(f"Remote file(s) fetched: {str(files)}")
 
 			## Fetch the directories
 			directories = self.load_remote_root_directories()
+			self.debug_print(f"Remote directories fetched: {str(directories)}")
 
 			# Add the directories and files to the treeview
 			if directories:
@@ -538,7 +554,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		output = subprocess.run(self.ampy_command + args, capture_output=True)
 		if output.returncode == 0:
 			files = output.stdout.decode("UTF-8").split("\n")
-			files.sort()  # Make sure the files are sorted alphabetically
+			files.sort(key=lambda v: (v.upper(), v))  # Make sure the files are sorted alphabetically
 		else:
 			error = output.stderr.decode("UTF-8")
 			index = error.find("RuntimeError:")
@@ -558,7 +574,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		output = subprocess.run(self.ampy_command + args, capture_output=True)
 		if output.returncode == 0:
 			directories = output.stdout.decode("UTF-8").split("\n")
-			directories.sort()  # Make sure the directories are sorted alphabetically
+			directories.sort(key=lambda v: (v.upper(), v))  # Make sure the directories are sorted alphabetically
 		else:
 			error = output.stderr.decode("UTF-8")
 			index = error.find("RuntimeError:")
@@ -630,17 +646,19 @@ class AppWindow(Gtk.ApplicationWindow):
 						os.chdir(self.current_local_path)
 						self.get_file(local_treeview, terminal_buffer, fname, os.path.join(self.current_local_path, fname))
 
-	def get_file(self, local_treeview, terminal_buffer, src_remote_file, dest_local_file):
+	def get_file(self, local_treeview, terminal_buffer, src_remote_file, dest_local_file, print=True):
 		args = ['get', src_remote_file, dest_local_file]
 		output = subprocess.run(self.ampy_command + args, capture_output=True)
 		if output.returncode == 0:
 			if local_treeview:
 				self.populate_local_tree_model(local_treeview)
-			self.print_and_terminal(terminal_buffer,
+			if print:
+				self.print_and_terminal(terminal_buffer,
 									"File '{}' successfully fetched from device".format(src_remote_file),
 									MsgType.INFO)
 		else:
-			self.print_and_terminal(terminal_buffer,
+			if print:
+				self.print_and_terminal(terminal_buffer,
 									"Error fetching file from device: '{}'".format(output.stderr.decode("utf-8"),
 																				   MsgType.ERROR))
 
@@ -666,9 +684,10 @@ class AppWindow(Gtk.ApplicationWindow):
 												"Error uploading file from device: '{}'".format(output.stderr.decode("utf-8")),
 												MsgType.ERROR)
 						return
+					self.debug_print("File '{}' successfully uploaded to device".format(file))
 
 				self.populate_remote_tree_model(remote_treeview)
-				msg = "Files '{}' successfully uploaded to remote device".format(", ".join(files_selected))
+				msg = "File(s) '{}' successfully uploaded to remote device".format(", ".join(files_selected))
 				self.print_and_terminal(terminal_buffer, msg, MsgType.INFO)
 
 
@@ -681,37 +700,46 @@ class AppWindow(Gtk.ApplicationWindow):
 			if rows_selected is None or len(rows_selected) == 0:
 				return
 			else:
+				if len(rows_selected) == 1:
+					msg = "Are you sure you want to delete '{}'?".format(rows_selected[0][0])
+				else:
+					msg = "Are you sure you want to delete these {} files?".format(len(rows_selected))
+				# Confirmation dialog
+				dialog = Gtk.MessageDialog(
+					transient_for=self,
+					flags=0,
+					message_type=Gtk.MessageType.QUESTION,
+					buttons=Gtk.ButtonsType.YES_NO,
+					text=msg,
+				)
+				dialog.set_decorated(False)
+				response = dialog.run()
+				dialog.destroy()
+
+				if response == Gtk.ResponseType.NO:
+					self.debug_print("File deletion canceled")
+					return
+
 				for row_selected in rows_selected:
 					fname, ftype = row_selected
 					if ftype == 'f':
-						# Confirmation dialog
-						msg = "Are you sure you want to delete the file '{}' from the device?".format(fname)
-						dialog = Gtk.MessageDialog(
-							transient_for=self,
-							flags=0,
-							message_type=Gtk.MessageType.QUESTION,
-							buttons=Gtk.ButtonsType.YES_NO,
-							text=msg,
-						)
-						dialog.set_decorated(False)
-						response = dialog.run()
-						dialog.destroy()
-
-						if response == Gtk.ResponseType.NO:
-							self.debug_print("File deletion canceled")
-							return
-
 						args=['rm', self.current_remote_path+'/'+fname]
 						output=subprocess.run(self.ampy_command + args, capture_output=True)
-						if output.returncode == 0:
-							self.populate_remote_tree_model(remote_treeview)
-							self.print_and_terminal(terminal_buffer,
-													"File '{}' successfully deleted from device".format(fname),
-													MsgType.INFO)
-						else:
+						if output.returncode != 0:
 							error = output.stderr.decode("UTF-8")
 							index = error.find("RuntimeError:")
 							self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
+
+				# File deletion done
+				if len(rows_selected) == 1:
+					msg = "File '{}' successfully deleted from device".format(rows_selected[0][0])
+				else:
+					files = rows_selected[0][0]
+					for i in range(1, len(rows_selected)):
+						files += ", {}".format(rows_selected[i][0])
+					msg = "Files '{}' successfully deleted from device".format(files)
+				self.populate_remote_tree_model(remote_treeview)
+				self.print_and_terminal(terminal_buffer, msg, MsgType.INFO)
 
 	def rmdir_button_clicked(self, button, remote_treeview, terminal_buffer):
 		""" Removes a directory on the remote device.
@@ -722,34 +750,45 @@ class AppWindow(Gtk.ApplicationWindow):
 			if rows_selected is None or len(rows_selected) == 0:
 				return
 			else:
+				if len(rows_selected) == 1:
+					msg = "Are you sure you want to delete the directory '{}'?".format(rows_selected[0][0])
+				else:
+					msg = "Are you sure you want to delete {} directories?".format(len(rows_selected))
+				# Confirmation dialog
+				dialog = Gtk.MessageDialog(
+					transient_for=self,
+					flags=0,
+					message_type=Gtk.MessageType.QUESTION,
+					buttons=Gtk.ButtonsType.YES_NO,
+					text=msg,
+				)
+				dialog.set_decorated(False)
+				response = dialog.run()
+				dialog.destroy()
+
+				if response == Gtk.ResponseType.NO:
+					self.debug_print("Directory deletion canceled")
+					return
+
 				for row_selected in rows_selected:
 					fname,ftype = row_selected
-					if ftype == 'd':
-						# Confirmation dialog
-						msg = "Are you sure you want to delete the directory '{}' from the device?".format(fname)
-						dialog = Gtk.MessageDialog(
-							transient_for=self,
-							flags=0,
-							message_type=Gtk.MessageType.QUESTION,
-							buttons=Gtk.ButtonsType.YES_NO,
-							text=msg,
-						)
-						dialog.set_decorated(False)
-						response = dialog.run()
-						dialog.destroy()
+					args=['rmdir',self.current_remote_path+'/'+fname]
+					output=subprocess.run(self.ampy_command+args,capture_output=True)
+					if output.returncode != 0:
+						error = output.stderr.decode("UTF-8")
+						index=error.find("RuntimeError:")
+						self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
 
-						if response == Gtk.ResponseType.NO:
-							self.debug_print("Directory deletion canceled")
-							return
-
-						args=['rmdir',self.current_remote_path+'/'+fname]
-						output=subprocess.run(self.ampy_command+args,capture_output=True)
-						if output.returncode == 0:
-							self.populate_remote_tree_model(remote_treeview)
-						else:
-							error = output.stderr.decode("UTF-8")
-							index=error.find("RuntimeError:")
-							self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
+				# Directory deletion done
+				if len(rows_selected) == 1:
+					msg = "Directory '{}' successfully deleted from device".format(rows_selected[0][0])
+				else:
+					dirs = rows_selected[0][0]
+					for i in range(1, len(rows_selected)):
+						dirs += ", {}".format(rows_selected[i][0])
+					msg = "Directories '{}' successfully deleted from device".format(dirs)
+				self.populate_remote_tree_model(remote_treeview)
+				self.print_and_terminal(terminal_buffer, msg, MsgType.INFO)
 					
 	def mkdir_button_clicked(self,button, remote_treeview, terminal_buffer):
 		""" Creates a new directory on the remote device.
@@ -802,16 +841,18 @@ class AppWindow(Gtk.ApplicationWindow):
 
 	def run_local_file(self, local_path, terminal_buffer):
 		args = ['run', local_path]
-		output = subprocess.run(self.ampy_command + args, capture_output=True)
-		if output.returncode == 0:
-			self.print_and_terminal(terminal_buffer, "---------Running local file {}---------".format(os.path.basename(local_path)),
-									MsgType.INFO)
-			self.print_and_terminal(terminal_buffer, output.stdout.decode("UTF-8"), MsgType.INFO)
-			self.print_and_terminal(terminal_buffer, "----------------------------", MsgType.INFO)
-		else:
-			error = output.stderr.decode("UTF-8")
-			index = error.find("RuntimeError:")
-			self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
+		try:
+			output = subprocess.run(self.ampy_command + args, capture_output=True)
+			if output.returncode == 0:
+				self.print_and_terminal(terminal_buffer, "---------Running local file {}---------".format(os.path.basename(local_path)),
+										MsgType.INFO)
+				self.print_and_terminal(terminal_buffer, output.stdout.decode("UTF-8"), MsgType.INFO)
+				self.print_and_terminal(terminal_buffer, "----------------------------", MsgType.INFO)
+			else:
+				error = output.stderr.decode("UTF-8")
+				self.print_and_terminal(terminal_buffer, error, MsgType.ERROR)
+		except PyboardError as e:
+			self.print_and_terminal(terminal_buffer, e, MsgType.ERROR)
 
 	def run_remote_button_clicked(self,button, remote_treeview, terminal_buffer):
 		response=self.check_for_device()
@@ -830,7 +871,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
 						# Fetch the file to be run from the remote device as a temp file, run that local temp file, then delete the temp file
 						tmp_file = os.path.join(self.progpath, "tmp", fname)
-						self.get_file(None, terminal_buffer, usepath, tmp_file)
+						self.get_file(None, terminal_buffer, usepath, tmp_file, print=False)
 						self.run_local_file(tmp_file, terminal_buffer)
 						os.remove(tmp_file)
 
@@ -936,16 +977,17 @@ class AppWindow(Gtk.ApplicationWindow):
 				
 				if fname == "..":
 					head,tail = os.path.split(self.current_remote_path)
-					self.current_remote_path = head
+					self.current_remote_path = head.strip()
 					self.populate_remote_tree_model(remote_treeview)
 				else:
 					if ftype == 'd':
-						self.current_remote_path=location
+						self.current_remote_path = location.strip()
 						self.populate_remote_tree_model(remote_treeview)
 
 	def clear_terminal(self, button, textbuffer):
 		textbuffer.delete(textbuffer.get_start_iter(), textbuffer.get_end_iter())
-	def set_terminal_text(self,textbuffer, inString, msgType: MsgType):
+
+	def set_terminal_text(self,textbuffer, inString,  msgType: MsgType):
 		end_iterator = textbuffer.get_end_iter()
 		textbuffer.insert_markup(end_iterator, "<span color='{}'>>>> {}</span>".format(msgType.value, inString), -1)
 
@@ -975,11 +1017,10 @@ class AppWindow(Gtk.ApplicationWindow):
 		if response == Gtk.ResponseType.OK:
 			dir = dialog.get_filename()
 			self.current_local_path = dir
+			self.debug_print(f"Switched to new local directory: {dir}")
 			self.populate_local_tree_model(local_treeview)
 
 		dialog.destroy()
-		# self.labelframe.set_label(os.path.basename(file_path))
-		# self.editor.open_file(file_path)
 
 class Warning(Gtk.Dialog):
 	def __init__(self,parent,msg):
@@ -987,8 +1028,7 @@ class Warning(Gtk.Dialog):
 
 		self.add_button(Gtk.STOCK_OK, Gtk.ResponseType.OK)
 
-
-		self.set_default_size(300,50)
+		self.set_default_size(400,100)
 		self.set_decorated(False)
 		self.set_border_width(2)
 
@@ -1130,5 +1170,12 @@ class Application(Gtk.Application):
 		self.window.debug = self.debug
 
 if __name__ == "__main__":
+	# Before anything, check if ampy is installed
+	try:
+		subprocess.run(["ampy", "--help"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+	except FileNotFoundError:
+		print("Error: Adafruit ampy is not installed. Please install it and try again.")
+		sys.exit(1)
+
 	app = Application()
 	app.run()

@@ -550,8 +550,7 @@ class AppWindow(Gtk.ApplicationWindow):
 			files.sort(key=lambda v: (v.upper(), v))  # Make sure the files are sorted alphabetically
 		else:
 			error = output.stderr.decode("UTF-8")
-			index = error.find("RuntimeError:")
-			self.debug_print(error[index:])
+			self.print_and_terminal(self.terminal_buffer, "ERROR: " + error, MsgType.ERROR)
 
 		return files
 
@@ -570,8 +569,7 @@ class AppWindow(Gtk.ApplicationWindow):
 			directories.sort(key=lambda v: (v.upper(), v))  # Make sure the directories are sorted alphabetically
 		else:
 			error = output.stderr.decode("UTF-8")
-			index = error.find("RuntimeError:")
-			self.debug_print(error[index:])
+			self.print_and_terminal(self.terminal_buffer, "ERROR: " + error, MsgType.ERROR)
 
 		return directories
 
@@ -730,8 +728,7 @@ class AppWindow(Gtk.ApplicationWindow):
 					output=subprocess.run(self.ampy_command + args, capture_output=True)
 					if output.returncode != 0:
 						error = output.stderr.decode("UTF-8")
-						index = error.find("RuntimeError:")
-						self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
+						self.print_and_terminal(self.terminal_buffer, "ERROR: " + error, MsgType.ERROR)
 
 				# File deletion done
 				if len(rows_selected) == 1:
@@ -777,8 +774,7 @@ class AppWindow(Gtk.ApplicationWindow):
 					self.populate_remote_tree_model(remote_treeview)
 				else:
 					error = output.stderr.decode("UTF-8")
-					index=error.find("RuntimeError:")
-					self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
+					self.print_and_terminal(self.terminal_buffer, "ERROR: " + error, MsgType.ERROR)
 
 	def reset_button_clicked(self,button, remote_treeview,terminal_buffer):
 		""" Performs a soft reset/reboot of the remote device.
@@ -792,8 +788,7 @@ class AppWindow(Gtk.ApplicationWindow):
 				self.populate_remote_tree_model(remote_treeview)
 			else:
 				error = output.stderr.decode("UTF-8")
-				index=error.find("RuntimeError:")
-				self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
+				self.print_and_terminal(self.terminal_buffer, "ERROR: " + error, MsgType.ERROR)
 
 	def run_local_button_clicked(self, button, local_treeview, terminal_buffer):
 		response = self.check_for_device()

@@ -34,7 +34,6 @@ class AppWindow(Gtk.ApplicationWindow):
 	get_button = None
 	run_remote_button = None
 	delete_button = None
-	rmdir_button = None
 	mkdir_button = None
 	reset_button = None
 
@@ -255,25 +254,21 @@ class AppWindow(Gtk.ApplicationWindow):
 		remote_services = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6,halign="fill")
 
 		self.mkdir_button = Gtk.Button.new_with_label("MKDIR")
-		self.rmdir_button = Gtk.Button.new_with_label("RMDIR")
 		self.run_remote_button = Gtk.Button.new_with_label("RUN")
 		self.reset_button = Gtk.Button.new_with_label("RESET")
 		self.delete_button = Gtk.Button.new_with_label("DELETE")
 
 		self.mkdir_button.set_sensitive(False)
-		self.rmdir_button.set_sensitive(False)
 		self.run_remote_button.set_sensitive(False)
 		self.reset_button.set_sensitive(False)
 		self.delete_button.set_sensitive(False)
 
 		self.mkdir_button.set_tooltip_text("Create a new directory on the remote device.")
-		self.rmdir_button.set_tooltip_text("Remove the selected directory from the remote device.")
 		self.run_remote_button.set_tooltip_text("Run the selected remote file on the remote device.")
 		self.reset_button.set_tooltip_text("Perform a soft reset/reboot of the remote device.")
-		self.delete_button.set_tooltip_text("Delete the selected file from the remote device.")
+		self.delete_button.set_tooltip_text("Delete the selected files/directories from the remote device.")
 
 		remote_buttons_box.pack_start(self.mkdir_button,False,False,0)
-		remote_buttons_box.pack_start(self.rmdir_button,False,False,0)
 		remote_buttons_box.pack_start(self.delete_button,False,False,0)
 		remote_buttons_box.pack_start(self.reset_button,False,False,0)
 		remote_buttons_box.pack_start(self.run_remote_button,False,False,0)
@@ -317,7 +312,6 @@ class AppWindow(Gtk.ApplicationWindow):
 		self.run_local_button.connect("clicked", self.run_local_button_clicked, self.local_treeview, terminal_buffer)
 		self.run_remote_button.connect("clicked", self.run_remote_button_clicked, self.remote_treeview,terminal_buffer)
 		self.mkdir_button.connect("clicked", self.mkdir_button_clicked, self.remote_treeview,terminal_buffer)
-		self.rmdir_button.connect("clicked", self.rmdir_button_clicked, self.remote_treeview,terminal_buffer)
 		self.reset_button.connect("clicked", self.reset_button_clicked, self.remote_treeview,terminal_buffer)
 		self.delete_button.connect("clicked", self.delete_button_clicked, self.remote_treeview,terminal_buffer)
 
@@ -532,7 +526,6 @@ class AppWindow(Gtk.ApplicationWindow):
 		remote_treeview.columns_autosize()
 
 		self.enable_remote_file_buttons(False)
-		self.enable_remote_directory_buttons(False)
 
 	def is_remote_dir(self, path):
 		args=['ls',path]
@@ -692,7 +685,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
 
 	def delete_button_clicked(self, button, remote_treeview, terminal_buffer):
-		""" Deletes a file from the remote device
+		""" Deletes the selected remote files/directories from the remote device.
 		"""
 		response = self.check_for_device()
 		if response == 0:
@@ -720,76 +713,51 @@ class AppWindow(Gtk.ApplicationWindow):
 					self.debug_print("File deletion canceled")
 					return
 
+				file_in_selection = False
+				directory_in_selection = False
 				for row_selected in rows_selected:
 					fname, ftype = row_selected
+					args = None
 					if ftype == 'f':
-						args=['rm', self.current_remote_path+'/'+fname]
-						output=subprocess.run(self.ampy_command + args, capture_output=True)
-						if output.returncode != 0:
-							error = output.stderr.decode("UTF-8")
-							index = error.find("RuntimeError:")
-							self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
+						args=['rm', self.current_remote_path + '/' + fname]
+						file_in_selection = True
+					elif ftype == 'd':
+						args = ['rmdir', self.current_remote_path + '/' + fname]
+						directory_in_selection = True
+					if args is None:
+						self.print_and_terminal(terminal_buffer, "Invalid file type detected", MsgType.ERROR)
+						return
+					output=subprocess.run(self.ampy_command + args, capture_output=True)
+					if output.returncode != 0:
+						error = output.stderr.decode("UTF-8")
+						index = error.find("RuntimeError:")
+						self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
 
 				# File deletion done
 				if len(rows_selected) == 1:
-					msg = "File '{}' successfully deleted from device".format(rows_selected[0][0])
+					if file_in_selection:
+						preamb = "File"
+					elif directory_in_selection:
+						preamb = "Directory"
+					else:
+						self.print_and_terminal(terminal_buffer, "No file, nor directory deleted?", MsgType.ERROR)
+						return
+					msg = "{} '{}' successfully deleted from device".format(preamb, rows_selected[0][0])
 				else:
 					files = rows_selected[0][0]
 					for i in range(1, len(rows_selected)):
 						files += ", {}".format(rows_selected[i][0])
-					msg = "Files '{}' successfully deleted from device".format(files)
+					if file_in_selection:
+						preamb = "Files"
+					elif directory_in_selection:
+						preamb = "Directories"
+					else:
+						self.print_and_terminal(terminal_buffer, "No files, nor directories deleted?", MsgType.ERROR)
+						return
+					msg = "{} '{}' successfully deleted from device".format(preamb, files)
 				self.populate_remote_tree_model(remote_treeview)
 				self.print_and_terminal(terminal_buffer, msg, MsgType.INFO)
 
-	def rmdir_button_clicked(self, button, remote_treeview, terminal_buffer):
-		""" Removes a directory on the remote device.
-		"""
-		response = self.check_for_device()
-		if response == 0:
-			rows_selected = self.remote_rows_selected(remote_treeview)
-			if rows_selected is None or len(rows_selected) == 0:
-				return
-			else:
-				if len(rows_selected) == 1:
-					msg = "Are you sure you want to delete the directory '{}'?".format(rows_selected[0][0])
-				else:
-					msg = "Are you sure you want to delete {} directories?".format(len(rows_selected))
-				# Confirmation dialog
-				dialog = Gtk.MessageDialog(
-					transient_for=self,
-					flags=0,
-					message_type=Gtk.MessageType.QUESTION,
-					buttons=Gtk.ButtonsType.YES_NO,
-					text=msg,
-				)
-				dialog.set_decorated(False)
-				response = dialog.run()
-				dialog.destroy()
-
-				if response == Gtk.ResponseType.NO:
-					self.debug_print("Directory deletion canceled")
-					return
-
-				for row_selected in rows_selected:
-					fname,ftype = row_selected
-					args=['rmdir',self.current_remote_path+'/'+fname]
-					output=subprocess.run(self.ampy_command+args,capture_output=True)
-					if output.returncode != 0:
-						error = output.stderr.decode("UTF-8")
-						index=error.find("RuntimeError:")
-						self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
-
-				# Directory deletion done
-				if len(rows_selected) == 1:
-					msg = "Directory '{}' successfully deleted from device".format(rows_selected[0][0])
-				else:
-					dirs = rows_selected[0][0]
-					for i in range(1, len(rows_selected)):
-						dirs += ", {}".format(rows_selected[i][0])
-					msg = "Directories '{}' successfully deleted from device".format(dirs)
-				self.populate_remote_tree_model(remote_treeview)
-				self.print_and_terminal(terminal_buffer, msg, MsgType.INFO)
-					
 	def mkdir_button_clicked(self,button, remote_treeview, terminal_buffer):
 		""" Creates a new directory on the remote device.
 		"""
@@ -920,7 +888,6 @@ class AppWindow(Gtk.ApplicationWindow):
 			self.remote_refresh_button.set_sensitive(False)
 			self.get_button.set_sensitive(False)
 			self.mkdir_button.set_sensitive(False)
-			self.rmdir_button.set_sensitive(False)
 			self.delete_button.set_sensitive(False)
 			self.reset_button.set_sensitive(False)
 			self.run_remote_button.set_sensitive(False)
@@ -929,39 +896,23 @@ class AppWindow(Gtk.ApplicationWindow):
 		self.run_remote_button.set_sensitive(value)
 		self.delete_button.set_sensitive(value)
 
-	def enable_remote_directory_buttons(self, value: bool):
-		self.rmdir_button.set_sensitive(value)
-
 	def on_remote_row_selected(self, tree_selection):
 		response = self.check_for_device()
 		if response == 0:
 			model, paths = tree_selection.get_selected_rows()
 			only_files_selected = True
-			only_dirs_selected = True
 			for fpath in paths:
 				iterator = model.get_iter(fpath)
-				fname = model.get_value(iterator, self.FILENAME)
 				ftype = model.get_value(iterator, self.TYPE)
 
-				if ftype == 'f':
-					only_dirs_selected = False
-				elif ftype == 'd':
-					if fname == "..":
-						only_dirs_selected = False
+				if ftype == 'd':
 					only_files_selected = False
 
-			if only_files_selected:
-				self.enable_remote_file_buttons(True)
-				self.enable_remote_directory_buttons(False)
-			elif only_dirs_selected:
-				self.enable_remote_directory_buttons(True)
-				self.enable_remote_file_buttons(False)
-			else:
-				self.enable_remote_file_buttons(False)
-				self.enable_remote_directory_buttons(False)
+			self.enable_remote_file_buttons(True)
+			if not only_files_selected:
+				self.run_remote_button.set_sensitive(False)
 		else:
 			self.enable_remote_file_buttons(False)
-			self.enable_remote_directory_buttons(False)
 
 	def on_remote_row_activated(self, remote_treeview, fpath, column):
 		response=self.check_for_device()

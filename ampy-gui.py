@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import sys, os
+import sys, os, getopt
 import configparser
 import gi
 gi.require_version('Gtk', '3.0')
@@ -23,7 +23,9 @@ class MsgType(Enum):
 
 class AppWindow(Gtk.ApplicationWindow):
 	debug = False
-	check_connection_delay = 120  # After how many seconds the connection should be checked again
+
+	use_timeout = True		# Whether to disconnect the device if after the timeout delay the device could net be connected to
+	timeout_delay = 120  	# After how many seconds the connection should be checked again
 
 	connected = False
 
@@ -43,8 +45,12 @@ class AppWindow(Gtk.ApplicationWindow):
 
 	terminal_buffer = None
 
-	def __init__(self, *args, **kwargs):
+	def __init__(self, debug=False, use_timeout=True, timeout_delay=120, *args, **kwargs):
 		super().__init__(*args, **kwargs)
+
+		self.debug = debug
+		self.use_timeout = use_timeout
+		self.timeout_delay = timeout_delay
 
 		self.set_border_width(10)
 		self.set_size_request(900, 700)
@@ -327,7 +333,8 @@ class AppWindow(Gtk.ApplicationWindow):
 		clear_terminal_button.connect("clicked", self.clear_terminal, self.terminal_buffer)
 
 		# Recheck the connection of the device after a certain delay time
-		GLib.timeout_add(self.check_connection_delay * 1000, self.recheck_connection)
+		if self.use_timeout:
+			GLib.timeout_add(self.timeout_delay * 1000, self.recheck_connection)
 
 		#SET FOCUS TO LOCAL FILELIST
 		self.local_treeview.grab_focus()
@@ -573,7 +580,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		args = ['run', run_file]
 		output = subprocess.run(self.ampy_command + args, capture_output=True)
 		if output.returncode == 0:
-			files = output.stdout.decode("UTF-8").split("\n")
+			files = output.stdout.decode("UTF-8").split("\r\n")
 			files.sort(key=lambda v: (v.upper(), v))  # Make sure the files are sorted alphabetically
 		else:
 			error = output.stderr.decode("UTF-8")
@@ -592,7 +599,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		args = ['run', run_file]
 		output = subprocess.run(self.ampy_command + args, capture_output=True)
 		if output.returncode == 0:
-			directories = output.stdout.decode("UTF-8").split("\n")
+			directories = output.stdout.decode("UTF-8").split("\r\n")
 			directories.sort(key=lambda v: (v.upper(), v))  # Make sure the directories are sorted alphabetically
 		else:
 			error = output.stderr.decode("UTF-8")
@@ -627,7 +634,7 @@ class AppWindow(Gtk.ApplicationWindow):
 				iterator = model.get_iter(fpath)
 				fname = model.get_value(iterator, self.FILENAME)
 				ftype = model.get_value(iterator, self.TYPE)
-				file = (fname.strip(), ftype)
+				file = (fname, ftype)
 				files.append(file)
 			return files
 		else:
@@ -662,7 +669,9 @@ class AppWindow(Gtk.ApplicationWindow):
 					fname, ftype = row_selected
 					if ftype == 'f':
 						os.chdir(self.current_local_path)
-						self.get_file(local_treeview, terminal_buffer, fname, os.path.join(self.current_local_path, fname))
+						self.get_file(local_treeview, terminal_buffer,
+										self.current_remote_path + "/" + fname,
+									   	os.path.join(self.current_local_path, fname))
 
 	def get_file(self, local_treeview, terminal_buffer, src_remote_file, dest_local_file, print=True):
 		args = ['get', src_remote_file, dest_local_file]
@@ -950,11 +959,11 @@ class AppWindow(Gtk.ApplicationWindow):
 				
 				if fname == "..":
 					head,tail = os.path.split(self.current_remote_path)
-					self.current_remote_path = head.strip()
+					self.current_remote_path = head
 					self.populate_remote_tree_model(remote_treeview)
 				else:
 					if ftype == 'd':
-						self.current_remote_path = location.strip()
+						self.current_remote_path = location
 						self.populate_remote_tree_model(remote_treeview)
 
 	def clear_terminal(self, button, textbuffer):
@@ -996,31 +1005,6 @@ class AppWindow(Gtk.ApplicationWindow):
 			self.populate_local_tree_model(local_treeview)
 
 		dialog.destroy()
-
-	def repeat_task(self, delay, task):
-		""" Repeats a task every delay seconds """
-		next_time = time.time() + delay
-		while True:
-			time.sleep(max(0, next_time - time.time()))
-			try:
-				task()
-			except Exception:
-				self.print_and_terminal(self.terminal_textbuffer, "Could not run task", MsgType.ERROR)
-			# skip tasks if we are behind schedule:
-			next_time += (time.time() - next_time) // delay * delay + delay
-
-class MyThread(Thread):
-	parent = None
-	def __init__(self, parent: AppWindow):
-		Thread.__init__(self)
-		self.stopped = Event()
-		self.setDaemon(True)
-		self.parent = parent
-
-	def run(self):
-		global check_connection_delay
-		while not self.stopped.wait(self.parent.check_connection_delay):
-			self.parent.recheck_connection()
 		
 class PopUp(Gtk.Dialog):
 	def __init__(self,parent):
@@ -1135,19 +1119,15 @@ class Application(Gtk.Application):
 						 **kwargs)
 		self.window = None
 
-		# Handle command-line arguments
-		if len(sys.argv) == 2 and (sys.argv[1] == "debug"):
-			self.debug = True
-		else:
-			self.debug = False
-		# TODO: command-line argument for config file
-
 	def do_activate(self):
 		if not self.window:
-			self.window = AppWindow(application=self, title="AMPY-GUI")
+			self.window = AppWindow(application=self, title="AMPY-GUI",
+									debug=self.debug, use_timeout=self.use_timeout, timeout_delay=self.timeout_delay)
+		self.window.debug = self.debug
+		self.window.use_timeout = self.use_timeout
+		self.window.timeout_delay = self.timeout_delay
 		self.window.show_all()
 		self.window.present()
-		self.window.debug = self.debug
 
 if __name__ == "__main__":
 	# Before anything, check if ampy is installed
@@ -1157,5 +1137,36 @@ if __name__ == "__main__":
 		print("Error: Adafruit ampy is not installed. Please install it and try again.")
 		sys.exit(1)
 
+	# Handle command-line arguments
+	debug = False
+	use_timeout = True
+	timeout_delay = 120
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], "hdnt:", ["help", "debug", "notimeout", "timedelay="])
+		for opt, arg in opts:
+			if opt in ['-h', '--help']:
+				print("Possible command line arguments:")
+				print("\t-h or --help : prints help info")
+				print("\t-d or --debug : enables debug printing in the console that you ran the script in")
+				print(
+					"\t-n or --notimeout : disables device connection timeout checking (if the device does not respond after a certain timeout delay, the connection is automatically broken)")
+				print(
+					"\t-t <timeout delay> or --timedelay <time delay> : specifies the timeout delay in seconds after which the device connection should be checked. Default delay is 120 seconds.")
+				sys.exit(2)
+			elif opt in ['-d', '--debug']:
+				debug = True
+			elif opt in ['-n', '--notimeout']:
+				use_timeout = False
+			elif opt in ['-t', '--timedelay']:
+				try:
+					timeout_delay = int(arg)
+				except ValueError:
+					print("Wrong formatting of timeout delay, falling back to default delay")
+	except Exception as e:
+		print("Could not parse command line : {}".format(e))
+
 	app = Application()
+	app.debug = debug
+	app.use_timeout = use_timeout
+	app.timeout_delay = timeout_delay
 	app.run()

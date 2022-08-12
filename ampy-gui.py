@@ -5,11 +5,12 @@ import configparser
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GObject, GdkPixbuf
-from gi.repository import Gdk
+from gi.repository import Gdk, GLib
 from ampy.pyboard import PyboardError
 import subprocess
 import serial.tools.list_ports
 from enum import Enum
+from threading import Thread, Event
 import glob
 
 
@@ -22,6 +23,9 @@ class MsgType(Enum):
 
 class AppWindow(Gtk.ApplicationWindow):
 	debug = False
+	check_connection_delay = 120  # After how many seconds the connection should be checked again
+
+	connected = False
 
 	local_treeview = None
 	remote_treeview = None
@@ -205,7 +209,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		local_refresh_button.set_name("small_button_padding")
 		local_refresh_button.set_tooltip_text("Refresh the file list of the local device.")
 		local_refresh_button.set_margin_start(4)
-		local_refresh_button.connect("clicked", self.refresh_local, self.local_treeview)
+		local_refresh_button.connect("clicked", self.on_refresh_local_button_clicked, self.local_treeview)
 
 		local_button_box.pack_start(local_dir_chooser_button, True, True, 0)
 		local_button_box.pack_start(local_refresh_button, True, True, 0)
@@ -218,7 +222,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		self.remote_refresh_button = Gtk.Button.new_with_label("Refresh")
 		self.remote_refresh_button.set_sensitive(False)
 		self.remote_refresh_button.set_tooltip_text("Refresh the file list of the remote device.")
-		self.remote_refresh_button.connect("clicked", self.refresh_remote, self.remote_treeview)
+		self.remote_refresh_button.connect("clicked", self.on_refresh_remote_button_clicked, self.remote_treeview)
 		remote_box.pack_start(self.remote_refresh_button,False,False,0)
 
 		#DEFINE LOCAL FUNCTION BOXES
@@ -294,7 +298,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		box_outer.pack_start(terminal_window,True, True,6)
 		
 		self.terminal_view = Gtk.TextView()
-		terminal_buffer = self.terminal_view.get_buffer()
+		self.terminal_buffer = self.terminal_view.get_buffer()
 
 		#MAKE TERMINAL READ ONLY
 		self.terminal_view.set_property('editable',False)
@@ -306,22 +310,24 @@ class AppWindow(Gtk.ApplicationWindow):
 
 		# TIE ACTIONS TO BUTTONS
 		select_port_button.connect("clicked", self.select_port_popup, port_entry)
-		connect_button.connect("clicked", self.connect_device, self.remote_treeview, self.terminal_view, terminal_buffer)
-		self.put_button.connect("clicked", self.put_button_clicked, self.local_treeview, self.remote_treeview,terminal_buffer)
-		self.get_button.connect("clicked", self.get_button_clicked, self.local_treeview, self.remote_treeview,terminal_buffer)
-		self.run_local_button.connect("clicked", self.run_local_button_clicked, self.local_treeview, terminal_buffer)
-		self.run_remote_button.connect("clicked", self.run_remote_button_clicked, self.remote_treeview,terminal_buffer)
-		self.mkdir_button.connect("clicked", self.mkdir_button_clicked, self.remote_treeview,terminal_buffer)
-		self.reset_button.connect("clicked", self.reset_button_clicked, self.remote_treeview,terminal_buffer)
-		self.delete_button.connect("clicked", self.delete_button_clicked, self.remote_treeview,terminal_buffer)
+		connect_button.connect("clicked", self.connect_device, self.remote_treeview, self.terminal_view, self.terminal_buffer)
+		self.put_button.connect("clicked", self.put_button_clicked, self.local_treeview, self.remote_treeview, self.terminal_buffer)
+		self.get_button.connect("clicked", self.get_button_clicked, self.local_treeview, self.remote_treeview, self.terminal_buffer)
+		self.run_local_button.connect("clicked", self.run_local_button_clicked, self.local_treeview, self.terminal_buffer)
+		self.run_remote_button.connect("clicked", self.run_remote_button_clicked, self.remote_treeview, self.terminal_buffer)
+		self.mkdir_button.connect("clicked", self.mkdir_button_clicked, self.remote_treeview, self.terminal_buffer)
+		self.reset_button.connect("clicked", self.reset_button_clicked, self.remote_treeview, self.terminal_buffer)
+		self.delete_button.connect("clicked", self.delete_button_clicked, self.remote_treeview, self.terminal_buffer)
 
 		# Clear terminal button
 		hbox = Gtk.HBox()
 		clear_terminal_button = Gtk.Button.new_with_label("Clear terminal")
 		hbox.pack_start(clear_terminal_button, False, False, 0)
 		box_outer.pack_start(hbox, False, False, 0)
-		clear_terminal_button.connect("clicked", self.clear_terminal, terminal_buffer)
+		clear_terminal_button.connect("clicked", self.clear_terminal, self.terminal_buffer)
 
+		# Recheck the connection of the device after a certain delay time
+		GLib.timeout_add(self.check_connection_delay * 1000, self.recheck_connection)
 
 		#SET FOCUS TO LOCAL FILELIST
 		self.local_treeview.grab_focus()
@@ -356,17 +362,38 @@ class AppWindow(Gtk.ApplicationWindow):
 	def update_ampy_command(self):
 		self.ampy_command = ['ampy', '--port', self.ampy_args[0], '--baud',self.ampy_args[1], '--delay',self.ampy_args[2]]
 
+	def recheck_connection(self):
+		""" Checks if the connected device is still available
+		"""
+		self.debug_print("Rechecking connection...")
+		if self.connected:
+			self.check_for_device()
+		else:
+			self.debug_print("No active device")
+		return True		# Necessary for the GLib timeout to keep running
+
 	def check_for_device(self):
 		try:
 			port = serial.Serial(port=self.ampy_args[0])
 			if port.isOpen():
 				self.enable_remote_buttons(True)
+				self.connected = True
 				return 0
 		except serial.SerialException as ex:
-			dialog = Warning(self,
-							 "Can't find your remote device '{}'\n\n"
-							 "Check the port settings or whether\n"
-							 "the port is in use in another program.".format(self.ampy_args[0]))
+			if self.connected:
+				self.print_and_terminal(self.terminal_buffer, "Device disconnected", MsgType.WARNING)
+			self.connected = False
+			msg = "Can't find your remote device '{}'".format(self.ampy_args[0])
+			msg_sec = "Check the port settings or whether the port is in use in another program."
+			dialog = Gtk.MessageDialog(
+				transient_for=self,
+				flags=0,
+				message_type=Gtk.MessageType.INFO,
+				buttons=Gtk.ButtonsType.OK,
+				text=msg,
+			)
+			dialog.format_secondary_text(msg_sec)
+			dialog.set_decorated(False)
 			dialog.run()
 			dialog.destroy()
 			self.clear_remote_tree_view(self.remote_treeview)
@@ -934,6 +961,8 @@ class AppWindow(Gtk.ApplicationWindow):
 		textbuffer.delete(textbuffer.get_start_iter(), textbuffer.get_end_iter())
 
 	def set_terminal_text(self,textbuffer, inString,  msgType: MsgType):
+		if textbuffer is None:
+			return
 		end_iterator = textbuffer.get_end_iter()
 		textbuffer.insert_markup(end_iterator, "<span color='{}'>>>> {}</span>".format(msgType.value, inString), -1)
 
@@ -945,10 +974,10 @@ class AppWindow(Gtk.ApplicationWindow):
 		self.debug_print(inString)
 		self.set_terminal_text(textbuffer, inString + "\n", msgType)
 
-	def refresh_local(self, button,local_treeview):
+	def on_refresh_local_button_clicked(self, button, local_treeview):
 		self.populate_local_tree_model(local_treeview)
 
-	def refresh_remote(self,button, remote_treeview):
+	def on_refresh_remote_button_clicked(self, button, remote_treeview):
 		response=self.check_for_device()
 		if response == 0:
 			self.populate_remote_tree_model(remote_treeview)
@@ -968,24 +997,30 @@ class AppWindow(Gtk.ApplicationWindow):
 
 		dialog.destroy()
 
-class Warning(Gtk.Dialog):
-	def __init__(self,parent,msg):
-		Gtk.Dialog.__init__(self, "Error", parent, 0)
+	def repeat_task(self, delay, task):
+		""" Repeats a task every delay seconds """
+		next_time = time.time() + delay
+		while True:
+			time.sleep(max(0, next_time - time.time()))
+			try:
+				task()
+			except Exception:
+				self.print_and_terminal(self.terminal_textbuffer, "Could not run task", MsgType.ERROR)
+			# skip tasks if we are behind schedule:
+			next_time += (time.time() - next_time) // delay * delay + delay
 
-		self.add_button(Gtk.STOCK_OK, Gtk.ResponseType.OK)
+class MyThread(Thread):
+	parent = None
+	def __init__(self, parent: AppWindow):
+		Thread.__init__(self)
+		self.stopped = Event()
+		self.setDaemon(True)
+		self.parent = parent
 
-		self.set_default_size(400,100)
-		self.set_decorated(False)
-		self.set_border_width(2)
-
-		box = self.get_content_area()
-		box.set_homogeneous(True)
-		box.set_border_width(6)
-		label = Gtk.Label()
-		label.set_text(msg)
-		label.set_justify(2)
-		box.pack_start(label,True,True,0)
-		self.show_all()
+	def run(self):
+		global check_connection_delay
+		while not self.stopped.wait(self.parent.check_connection_delay):
+			self.parent.recheck_connection()
 		
 class PopUp(Gtk.Dialog):
 	def __init__(self,parent):
@@ -1016,7 +1051,6 @@ class PopUp(Gtk.Dialog):
 
 	def get_result(self):
 		return self.result
-
 
 class SelectPortPopUp(Gtk.Dialog):
 	def __init__(self, parent):

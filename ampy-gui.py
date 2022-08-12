@@ -1146,12 +1146,12 @@ if __name__ == "__main__":
 		for opt, arg in opts:
 			if opt in ['-h', '--help']:
 				print("Possible command line arguments:")
-				print("\t-h or --help : prints help info")
-				print("\t-d or --debug : enables debug printing in the console that you ran the script in")
+				print("\t-h or --help : prints help info.")
+				print("\t-d or --debug : enables debug printing in the console that you ran the script in.")
 				print(
-					"\t-n or --notimeout : disables device connection timeout checking (if the device does not respond after a certain timeout delay, the connection is automatically broken)")
+					"\t-n or --notimeout : disables device connection timeout checking (if the device does not respond after a certain timeout delay, the connection is automatically broken).")
 				print(
-					"\t-t <timeout delay> or --timedelay <time delay> : specifies the timeout delay in seconds after which the device connection should be checked. Default delay is 120 seconds.")
+					"\t-t <timeout delay> or --timedelay <time delay> : specifies the timeout delay in seconds after which the device connection should be checked. Default delay is 120 seconds")
 				sys.exit(2)
 			elif opt in ['-d', '--debug']:
 				debug = True

@@ -1,15 +1,16 @@
 #!/usr/bin/python3
 
-import sys, os
+import sys, os, getopt
 import configparser
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GObject, GdkPixbuf
-from gi.repository import Gdk
+from gi.repository import Gdk, GLib
 from ampy.pyboard import PyboardError
 import subprocess
 import serial.tools.list_ports
 from enum import Enum
+from threading import Thread, Event
 import glob
 
 
@@ -23,6 +24,11 @@ class MsgType(Enum):
 class AppWindow(Gtk.ApplicationWindow):
 	debug = False
 
+	use_timeout = True		# Whether to disconnect the device if after the timeout delay the device could net be connected to
+	timeout_delay = 120  	# After how many seconds the connection should be checked again
+
+	connected = False
+
 	local_treeview = None
 	remote_treeview = None
 
@@ -34,14 +40,17 @@ class AppWindow(Gtk.ApplicationWindow):
 	get_button = None
 	run_remote_button = None
 	delete_button = None
-	rmdir_button = None
 	mkdir_button = None
 	reset_button = None
 
 	terminal_buffer = None
 
-	def __init__(self, *args, **kwargs):
+	def __init__(self, debug=False, use_timeout=True, timeout_delay=120, *args, **kwargs):
 		super().__init__(*args, **kwargs)
+
+		self.debug = debug
+		self.use_timeout = use_timeout
+		self.timeout_delay = timeout_delay
 
 		self.set_border_width(10)
 		self.set_size_request(900, 700)
@@ -206,7 +215,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		local_refresh_button.set_name("small_button_padding")
 		local_refresh_button.set_tooltip_text("Refresh the file list of the local device.")
 		local_refresh_button.set_margin_start(4)
-		local_refresh_button.connect("clicked", self.refresh_local, self.local_treeview)
+		local_refresh_button.connect("clicked", self.on_refresh_local_button_clicked, self.local_treeview)
 
 		local_button_box.pack_start(local_dir_chooser_button, True, True, 0)
 		local_button_box.pack_start(local_refresh_button, True, True, 0)
@@ -219,7 +228,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		self.remote_refresh_button = Gtk.Button.new_with_label("Refresh")
 		self.remote_refresh_button.set_sensitive(False)
 		self.remote_refresh_button.set_tooltip_text("Refresh the file list of the remote device.")
-		self.remote_refresh_button.connect("clicked", self.refresh_remote, self.remote_treeview)
+		self.remote_refresh_button.connect("clicked", self.on_refresh_remote_button_clicked, self.remote_treeview)
 		remote_box.pack_start(self.remote_refresh_button,False,False,0)
 
 		#DEFINE LOCAL FUNCTION BOXES
@@ -255,25 +264,21 @@ class AppWindow(Gtk.ApplicationWindow):
 		remote_services = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6,halign="fill")
 
 		self.mkdir_button = Gtk.Button.new_with_label("MKDIR")
-		self.rmdir_button = Gtk.Button.new_with_label("RMDIR")
 		self.run_remote_button = Gtk.Button.new_with_label("RUN")
 		self.reset_button = Gtk.Button.new_with_label("RESET")
 		self.delete_button = Gtk.Button.new_with_label("DELETE")
 
 		self.mkdir_button.set_sensitive(False)
-		self.rmdir_button.set_sensitive(False)
 		self.run_remote_button.set_sensitive(False)
 		self.reset_button.set_sensitive(False)
 		self.delete_button.set_sensitive(False)
 
 		self.mkdir_button.set_tooltip_text("Create a new directory on the remote device.")
-		self.rmdir_button.set_tooltip_text("Remove the selected directory from the remote device.")
 		self.run_remote_button.set_tooltip_text("Run the selected remote file on the remote device.")
 		self.reset_button.set_tooltip_text("Perform a soft reset/reboot of the remote device.")
-		self.delete_button.set_tooltip_text("Delete the selected file from the remote device.")
+		self.delete_button.set_tooltip_text("Delete the selected files/directories from the remote device.")
 
 		remote_buttons_box.pack_start(self.mkdir_button,False,False,0)
-		remote_buttons_box.pack_start(self.rmdir_button,False,False,0)
 		remote_buttons_box.pack_start(self.delete_button,False,False,0)
 		remote_buttons_box.pack_start(self.reset_button,False,False,0)
 		remote_buttons_box.pack_start(self.run_remote_button,False,False,0)
@@ -299,7 +304,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		box_outer.pack_start(terminal_window,True, True,6)
 		
 		self.terminal_view = Gtk.TextView()
-		terminal_buffer = self.terminal_view.get_buffer()
+		self.terminal_buffer = self.terminal_view.get_buffer()
 
 		#MAKE TERMINAL READ ONLY
 		self.terminal_view.set_property('editable',False)
@@ -311,23 +316,25 @@ class AppWindow(Gtk.ApplicationWindow):
 
 		# TIE ACTIONS TO BUTTONS
 		select_port_button.connect("clicked", self.select_port_popup, port_entry)
-		connect_button.connect("clicked", self.connect_device, self.remote_treeview, self.terminal_view, terminal_buffer)
-		self.put_button.connect("clicked", self.put_button_clicked, self.local_treeview, self.remote_treeview,terminal_buffer)
-		self.get_button.connect("clicked", self.get_button_clicked, self.local_treeview, self.remote_treeview,terminal_buffer)
-		self.run_local_button.connect("clicked", self.run_local_button_clicked, self.local_treeview, terminal_buffer)
-		self.run_remote_button.connect("clicked", self.run_remote_button_clicked, self.remote_treeview,terminal_buffer)
-		self.mkdir_button.connect("clicked", self.mkdir_button_clicked, self.remote_treeview,terminal_buffer)
-		self.rmdir_button.connect("clicked", self.rmdir_button_clicked, self.remote_treeview,terminal_buffer)
-		self.reset_button.connect("clicked", self.reset_button_clicked, self.remote_treeview,terminal_buffer)
-		self.delete_button.connect("clicked", self.delete_button_clicked, self.remote_treeview,terminal_buffer)
+		connect_button.connect("clicked", self.connect_device, self.remote_treeview, self.terminal_view, self.terminal_buffer)
+		self.put_button.connect("clicked", self.put_button_clicked, self.local_treeview, self.remote_treeview, self.terminal_buffer)
+		self.get_button.connect("clicked", self.get_button_clicked, self.local_treeview, self.remote_treeview, self.terminal_buffer)
+		self.run_local_button.connect("clicked", self.run_local_button_clicked, self.local_treeview, self.terminal_buffer)
+		self.run_remote_button.connect("clicked", self.run_remote_button_clicked, self.remote_treeview, self.terminal_buffer)
+		self.mkdir_button.connect("clicked", self.mkdir_button_clicked, self.remote_treeview, self.terminal_buffer)
+		self.reset_button.connect("clicked", self.reset_button_clicked, self.remote_treeview, self.terminal_buffer)
+		self.delete_button.connect("clicked", self.delete_button_clicked, self.remote_treeview, self.terminal_buffer)
 
 		# Clear terminal button
 		hbox = Gtk.HBox()
 		clear_terminal_button = Gtk.Button.new_with_label("Clear terminal")
 		hbox.pack_start(clear_terminal_button, False, False, 0)
 		box_outer.pack_start(hbox, False, False, 0)
-		clear_terminal_button.connect("clicked", self.clear_terminal, terminal_buffer)
+		clear_terminal_button.connect("clicked", self.clear_terminal, self.terminal_buffer)
 
+		# Recheck the connection of the device after a certain delay time
+		if self.use_timeout:
+			GLib.timeout_add(self.timeout_delay * 1000, self.recheck_connection)
 
 		#SET FOCUS TO LOCAL FILELIST
 		self.local_treeview.grab_focus()
@@ -362,17 +369,38 @@ class AppWindow(Gtk.ApplicationWindow):
 	def update_ampy_command(self):
 		self.ampy_command = ['ampy', '--port', self.ampy_args[0], '--baud',self.ampy_args[1], '--delay',self.ampy_args[2]]
 
+	def recheck_connection(self):
+		""" Checks if the connected device is still available
+		"""
+		self.debug_print("Rechecking connection...")
+		if self.connected:
+			self.check_for_device()
+		else:
+			self.debug_print("No active device")
+		return True		# Necessary for the GLib timeout to keep running
+
 	def check_for_device(self):
 		try:
 			port = serial.Serial(port=self.ampy_args[0])
 			if port.isOpen():
 				self.enable_remote_buttons(True)
+				self.connected = True
 				return 0
 		except serial.SerialException as ex:
-			dialog = Warning(self,
-							 "Can't find your remote device '{}'\n\n"
-							 "Check the port settings or whether\n"
-							 "the port is in use in another program.".format(self.ampy_args[0]))
+			if self.connected:
+				self.print_and_terminal(self.terminal_buffer, "Device disconnected", MsgType.WARNING)
+			self.connected = False
+			msg = "Can't find your remote device '{}'".format(self.ampy_args[0])
+			msg_sec = "Check the port settings or whether the port is in use in another program."
+			dialog = Gtk.MessageDialog(
+				transient_for=self,
+				flags=0,
+				message_type=Gtk.MessageType.INFO,
+				buttons=Gtk.ButtonsType.OK,
+				text=msg,
+			)
+			dialog.format_secondary_text(msg_sec)
+			dialog.set_decorated(False)
 			dialog.run()
 			dialog.destroy()
 			self.clear_remote_tree_view(self.remote_treeview)
@@ -532,7 +560,6 @@ class AppWindow(Gtk.ApplicationWindow):
 		remote_treeview.columns_autosize()
 
 		self.enable_remote_file_buttons(False)
-		self.enable_remote_directory_buttons(False)
 
 	def is_remote_dir(self, path):
 		args=['ls',path]
@@ -553,12 +580,11 @@ class AppWindow(Gtk.ApplicationWindow):
 		args = ['run', run_file]
 		output = subprocess.run(self.ampy_command + args, capture_output=True)
 		if output.returncode == 0:
-			files = output.stdout.decode("UTF-8").split("\n")
+			files = output.stdout.decode("UTF-8").split("\r\n")
 			files.sort(key=lambda v: (v.upper(), v))  # Make sure the files are sorted alphabetically
 		else:
 			error = output.stderr.decode("UTF-8")
-			index = error.find("RuntimeError:")
-			self.debug_print(error[index:])
+			self.print_and_terminal(self.terminal_buffer, "ERROR: " + error, MsgType.ERROR)
 
 		return files
 
@@ -573,12 +599,11 @@ class AppWindow(Gtk.ApplicationWindow):
 		args = ['run', run_file]
 		output = subprocess.run(self.ampy_command + args, capture_output=True)
 		if output.returncode == 0:
-			directories = output.stdout.decode("UTF-8").split("\n")
+			directories = output.stdout.decode("UTF-8").split("\r\n")
 			directories.sort(key=lambda v: (v.upper(), v))  # Make sure the directories are sorted alphabetically
 		else:
 			error = output.stderr.decode("UTF-8")
-			index = error.find("RuntimeError:")
-			self.debug_print(error[index:])
+			self.print_and_terminal(self.terminal_buffer, "ERROR: " + error, MsgType.ERROR)
 
 		return directories
 
@@ -609,7 +634,7 @@ class AppWindow(Gtk.ApplicationWindow):
 				iterator = model.get_iter(fpath)
 				fname = model.get_value(iterator, self.FILENAME)
 				ftype = model.get_value(iterator, self.TYPE)
-				file = (fname.strip(), ftype)
+				file = (fname, ftype)
 				files.append(file)
 			return files
 		else:
@@ -644,7 +669,9 @@ class AppWindow(Gtk.ApplicationWindow):
 					fname, ftype = row_selected
 					if ftype == 'f':
 						os.chdir(self.current_local_path)
-						self.get_file(local_treeview, terminal_buffer, fname, os.path.join(self.current_local_path, fname))
+						self.get_file(local_treeview, terminal_buffer,
+										self.current_remote_path + "/" + fname,
+									   	os.path.join(self.current_local_path, fname))
 
 	def get_file(self, local_treeview, terminal_buffer, src_remote_file, dest_local_file, print=True):
 		args = ['get', src_remote_file, dest_local_file]
@@ -692,7 +719,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
 
 	def delete_button_clicked(self, button, remote_treeview, terminal_buffer):
-		""" Deletes a file from the remote device
+		""" Deletes the selected remote files/directories from the remote device.
 		"""
 		response = self.check_for_device()
 		if response == 0:
@@ -720,76 +747,50 @@ class AppWindow(Gtk.ApplicationWindow):
 					self.debug_print("File deletion canceled")
 					return
 
+				file_in_selection = False
+				directory_in_selection = False
 				for row_selected in rows_selected:
 					fname, ftype = row_selected
+					args = None
 					if ftype == 'f':
-						args=['rm', self.current_remote_path+'/'+fname]
-						output=subprocess.run(self.ampy_command + args, capture_output=True)
-						if output.returncode != 0:
-							error = output.stderr.decode("UTF-8")
-							index = error.find("RuntimeError:")
-							self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
+						args=['rm', self.current_remote_path + '/' + fname]
+						file_in_selection = True
+					elif ftype == 'd':
+						args = ['rmdir', self.current_remote_path + '/' + fname]
+						directory_in_selection = True
+					if args is None:
+						self.print_and_terminal(terminal_buffer, "Invalid file type detected", MsgType.ERROR)
+						return
+					output=subprocess.run(self.ampy_command + args, capture_output=True)
+					if output.returncode != 0:
+						error = output.stderr.decode("UTF-8")
+						self.print_and_terminal(self.terminal_buffer, "ERROR: " + error, MsgType.ERROR)
 
 				# File deletion done
 				if len(rows_selected) == 1:
-					msg = "File '{}' successfully deleted from device".format(rows_selected[0][0])
+					if file_in_selection:
+						preamb = "File"
+					elif directory_in_selection:
+						preamb = "Directory"
+					else:
+						self.print_and_terminal(terminal_buffer, "No file, nor directory deleted?", MsgType.ERROR)
+						return
+					msg = "{} '{}' successfully deleted from device".format(preamb, rows_selected[0][0])
 				else:
 					files = rows_selected[0][0]
 					for i in range(1, len(rows_selected)):
 						files += ", {}".format(rows_selected[i][0])
-					msg = "Files '{}' successfully deleted from device".format(files)
+					if file_in_selection:
+						preamb = "Files"
+					elif directory_in_selection:
+						preamb = "Directories"
+					else:
+						self.print_and_terminal(terminal_buffer, "No files, nor directories deleted?", MsgType.ERROR)
+						return
+					msg = "{} '{}' successfully deleted from device".format(preamb, files)
 				self.populate_remote_tree_model(remote_treeview)
 				self.print_and_terminal(terminal_buffer, msg, MsgType.INFO)
 
-	def rmdir_button_clicked(self, button, remote_treeview, terminal_buffer):
-		""" Removes a directory on the remote device.
-		"""
-		response = self.check_for_device()
-		if response == 0:
-			rows_selected = self.remote_rows_selected(remote_treeview)
-			if rows_selected is None or len(rows_selected) == 0:
-				return
-			else:
-				if len(rows_selected) == 1:
-					msg = "Are you sure you want to delete the directory '{}'?".format(rows_selected[0][0])
-				else:
-					msg = "Are you sure you want to delete {} directories?".format(len(rows_selected))
-				# Confirmation dialog
-				dialog = Gtk.MessageDialog(
-					transient_for=self,
-					flags=0,
-					message_type=Gtk.MessageType.QUESTION,
-					buttons=Gtk.ButtonsType.YES_NO,
-					text=msg,
-				)
-				dialog.set_decorated(False)
-				response = dialog.run()
-				dialog.destroy()
-
-				if response == Gtk.ResponseType.NO:
-					self.debug_print("Directory deletion canceled")
-					return
-
-				for row_selected in rows_selected:
-					fname,ftype = row_selected
-					args=['rmdir',self.current_remote_path+'/'+fname]
-					output=subprocess.run(self.ampy_command+args,capture_output=True)
-					if output.returncode != 0:
-						error = output.stderr.decode("UTF-8")
-						index=error.find("RuntimeError:")
-						self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
-
-				# Directory deletion done
-				if len(rows_selected) == 1:
-					msg = "Directory '{}' successfully deleted from device".format(rows_selected[0][0])
-				else:
-					dirs = rows_selected[0][0]
-					for i in range(1, len(rows_selected)):
-						dirs += ", {}".format(rows_selected[i][0])
-					msg = "Directories '{}' successfully deleted from device".format(dirs)
-				self.populate_remote_tree_model(remote_treeview)
-				self.print_and_terminal(terminal_buffer, msg, MsgType.INFO)
-					
 	def mkdir_button_clicked(self,button, remote_treeview, terminal_buffer):
 		""" Creates a new directory on the remote device.
 		"""
@@ -809,8 +810,7 @@ class AppWindow(Gtk.ApplicationWindow):
 					self.populate_remote_tree_model(remote_treeview)
 				else:
 					error = output.stderr.decode("UTF-8")
-					index=error.find("RuntimeError:")
-					self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
+					self.print_and_terminal(self.terminal_buffer, "ERROR: " + error, MsgType.ERROR)
 
 	def reset_button_clicked(self,button, remote_treeview,terminal_buffer):
 		""" Performs a soft reset/reboot of the remote device.
@@ -824,8 +824,7 @@ class AppWindow(Gtk.ApplicationWindow):
 				self.populate_remote_tree_model(remote_treeview)
 			else:
 				error = output.stderr.decode("UTF-8")
-				index=error.find("RuntimeError:")
-				self.print_and_terminal(terminal_buffer, error[index:], MsgType.ERROR)
+				self.print_and_terminal(self.terminal_buffer, "ERROR: " + error, MsgType.ERROR)
 
 	def run_local_button_clicked(self, button, local_treeview, terminal_buffer):
 		response = self.check_for_device()
@@ -920,7 +919,6 @@ class AppWindow(Gtk.ApplicationWindow):
 			self.remote_refresh_button.set_sensitive(False)
 			self.get_button.set_sensitive(False)
 			self.mkdir_button.set_sensitive(False)
-			self.rmdir_button.set_sensitive(False)
 			self.delete_button.set_sensitive(False)
 			self.reset_button.set_sensitive(False)
 			self.run_remote_button.set_sensitive(False)
@@ -929,39 +927,23 @@ class AppWindow(Gtk.ApplicationWindow):
 		self.run_remote_button.set_sensitive(value)
 		self.delete_button.set_sensitive(value)
 
-	def enable_remote_directory_buttons(self, value: bool):
-		self.rmdir_button.set_sensitive(value)
-
 	def on_remote_row_selected(self, tree_selection):
 		response = self.check_for_device()
 		if response == 0:
 			model, paths = tree_selection.get_selected_rows()
 			only_files_selected = True
-			only_dirs_selected = True
 			for fpath in paths:
 				iterator = model.get_iter(fpath)
-				fname = model.get_value(iterator, self.FILENAME)
 				ftype = model.get_value(iterator, self.TYPE)
 
-				if ftype == 'f':
-					only_dirs_selected = False
-				elif ftype == 'd':
-					if fname == "..":
-						only_dirs_selected = False
+				if ftype == 'd':
 					only_files_selected = False
 
-			if only_files_selected:
-				self.enable_remote_file_buttons(True)
-				self.enable_remote_directory_buttons(False)
-			elif only_dirs_selected:
-				self.enable_remote_directory_buttons(True)
-				self.enable_remote_file_buttons(False)
-			else:
-				self.enable_remote_file_buttons(False)
-				self.enable_remote_directory_buttons(False)
+			self.enable_remote_file_buttons(True)
+			if not only_files_selected:
+				self.run_remote_button.set_sensitive(False)
 		else:
 			self.enable_remote_file_buttons(False)
-			self.enable_remote_directory_buttons(False)
 
 	def on_remote_row_activated(self, remote_treeview, fpath, column):
 		response=self.check_for_device()
@@ -977,17 +959,19 @@ class AppWindow(Gtk.ApplicationWindow):
 				
 				if fname == "..":
 					head,tail = os.path.split(self.current_remote_path)
-					self.current_remote_path = head.strip()
+					self.current_remote_path = head
 					self.populate_remote_tree_model(remote_treeview)
 				else:
 					if ftype == 'd':
-						self.current_remote_path = location.strip()
+						self.current_remote_path = location
 						self.populate_remote_tree_model(remote_treeview)
 
 	def clear_terminal(self, button, textbuffer):
 		textbuffer.delete(textbuffer.get_start_iter(), textbuffer.get_end_iter())
 
 	def set_terminal_text(self,textbuffer, inString,  msgType: MsgType):
+		if textbuffer is None:
+			return
 		end_iterator = textbuffer.get_end_iter()
 		textbuffer.insert_markup(end_iterator, "<span color='{}'>>>> {}</span>".format(msgType.value, inString), -1)
 
@@ -999,10 +983,10 @@ class AppWindow(Gtk.ApplicationWindow):
 		self.debug_print(inString)
 		self.set_terminal_text(textbuffer, inString + "\n", msgType)
 
-	def refresh_local(self, button,local_treeview):
+	def on_refresh_local_button_clicked(self, button, local_treeview):
 		self.populate_local_tree_model(local_treeview)
 
-	def refresh_remote(self,button, remote_treeview):
+	def on_refresh_remote_button_clicked(self, button, remote_treeview):
 		response=self.check_for_device()
 		if response == 0:
 			self.populate_remote_tree_model(remote_treeview)
@@ -1021,25 +1005,6 @@ class AppWindow(Gtk.ApplicationWindow):
 			self.populate_local_tree_model(local_treeview)
 
 		dialog.destroy()
-
-class Warning(Gtk.Dialog):
-	def __init__(self,parent,msg):
-		Gtk.Dialog.__init__(self, "Error", parent, 0)
-
-		self.add_button(Gtk.STOCK_OK, Gtk.ResponseType.OK)
-
-		self.set_default_size(400,100)
-		self.set_decorated(False)
-		self.set_border_width(2)
-
-		box = self.get_content_area()
-		box.set_homogeneous(True)
-		box.set_border_width(6)
-		label = Gtk.Label()
-		label.set_text(msg)
-		label.set_justify(2)
-		box.pack_start(label,True,True,0)
-		self.show_all()
 		
 class PopUp(Gtk.Dialog):
 	def __init__(self,parent):
@@ -1070,7 +1035,6 @@ class PopUp(Gtk.Dialog):
 
 	def get_result(self):
 		return self.result
-
 
 class SelectPortPopUp(Gtk.Dialog):
 	def __init__(self, parent):
@@ -1155,19 +1119,15 @@ class Application(Gtk.Application):
 						 **kwargs)
 		self.window = None
 
-		# Handle command-line arguments
-		if len(sys.argv) == 2 and (sys.argv[1] == "debug"):
-			self.debug = True
-		else:
-			self.debug = False
-		# TODO: command-line argument for config file
-
 	def do_activate(self):
 		if not self.window:
-			self.window = AppWindow(application=self, title="AMPY-GUI")
+			self.window = AppWindow(application=self, title="AMPY-GUI",
+									debug=self.debug, use_timeout=self.use_timeout, timeout_delay=self.timeout_delay)
+		self.window.debug = self.debug
+		self.window.use_timeout = self.use_timeout
+		self.window.timeout_delay = self.timeout_delay
 		self.window.show_all()
 		self.window.present()
-		self.window.debug = self.debug
 
 if __name__ == "__main__":
 	# Before anything, check if ampy is installed
@@ -1177,5 +1137,36 @@ if __name__ == "__main__":
 		print("Error: Adafruit ampy is not installed. Please install it and try again.")
 		sys.exit(1)
 
+	# Handle command-line arguments
+	debug = False
+	use_timeout = True
+	timeout_delay = 120
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], "hdnt:", ["help", "debug", "notimeout", "timedelay="])
+		for opt, arg in opts:
+			if opt in ['-h', '--help']:
+				print("Possible command line arguments:")
+				print("\t-h or --help : prints help info.")
+				print("\t-d or --debug : enables debug printing in the console that you ran the script in.")
+				print(
+					"\t-n or --notimeout : disables device connection timeout checking (if the device does not respond after a certain timeout delay, the connection is automatically broken).")
+				print(
+					"\t-t <timeout delay> or --timedelay <time delay> : specifies the timeout delay in seconds after which the device connection should be checked. Default delay is 120 seconds")
+				sys.exit(2)
+			elif opt in ['-d', '--debug']:
+				debug = True
+			elif opt in ['-n', '--notimeout']:
+				use_timeout = False
+			elif opt in ['-t', '--timedelay']:
+				try:
+					timeout_delay = int(arg)
+				except ValueError:
+					print("Wrong formatting of timeout delay, falling back to default delay")
+	except Exception as e:
+		print("Could not parse command line : {}".format(e))
+
 	app = Application()
+	app.debug = debug
+	app.use_timeout = use_timeout
+	app.timeout_delay = timeout_delay
 	app.run()

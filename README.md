@@ -7,6 +7,8 @@ I believe it implements all ampy commands except for the --no-output run modifie
 
 The default baud setting of 115200 seems to be the only baud setting the works with ampy. Not sure why that is.
 
+By default, the program will check every 2 minutes if the remote device is still connected. If not, it will automatically disconnect the device.
+
 Any errors are also displayed in the scrollbox.
 
 Prerequisites:
@@ -21,7 +23,17 @@ the directory that you ran the command in. E.g. you're in directory `user/mydir`
 the tree view will open in `user/mydir`.
 
 To also print debug messages to your local terminal, run with:
-`python3 ampy-gui.py debug`
+`python3 ampy-gui.py -d` or `python3 ampy-gui.py --debug`
+
+The following other arguments are available:
+- `-h` or `--help` : prints help info.
+- `-d` or `--debug` : enables debug printing in the console that you ran the script in.
+- `-n` or `--notimeout` : disables device connection timeout checking (if the device does not respond after a certain timeout delay, the connection is automatically broken).
+- `-t <timeout delay>` or `--timedelay <time delay>` : specifies the timeout delay in seconds after which the device connection should be checked. Default delay is 120 seconds.
+
+Example: run the program with debug information, and no timeout checking: `python3 ampy-gui.py -d -n`
+
+Example: run the program with no debug information, and 5 minute timeout checking: `python3 ampy-gui.py -t 300`
 
 Instructions:
 - Plug in your device

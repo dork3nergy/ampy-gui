@@ -14,6 +14,8 @@ from threading import Thread, Event
 import glob
 
 
+ignore_files = [".DS_Store"]	# ignore these files when listing files in a directory
+
 class MsgType(Enum):
 	""" Different message type options for the terminal window, and the corresponding color of the terminal text.
 	"""
@@ -485,6 +487,8 @@ class AppWindow(Gtk.ApplicationWindow):
 		filelst = os.listdir(self.current_local_path)
 		filelst.sort(key=lambda v: (v.upper(), v))
 		for file in filelst:
+			if file in ignore_files:
+				continue
 			temp = os.path.join(self.current_local_path, file)
 			if os.path.isdir(temp):
 				pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
@@ -492,6 +496,8 @@ class AppWindow(Gtk.ApplicationWindow):
 				store.set(iterator, self.ICON, pixbuf, self.FILENAME, file)
 
 		for file in filelst:
+			if file in ignore_files:
+				continue
 			temp = os.path.join(self.current_local_path, file)
 			if os.path.isfile(temp):
 				pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "file.png"))

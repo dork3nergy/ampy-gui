@@ -367,6 +367,9 @@ class AppWindow(Gtk.ApplicationWindow):
 			self.print_and_terminal(terminal_buffer,
 									"Connected to device {}\nHello world!! :)".format(self.ampy_args[0]),
 									MsgType.INFO)
+			model, paths = self.local_treeview.get_selection().get_selected_rows()
+			if len(paths) > 0:
+				self.put_button.set_sensitive(True)
 
 	def update_ampy_command(self):
 		self.ampy_command = ['ampy', '--port', self.ampy_args[0], '--baud',self.ampy_args[1], '--delay',self.ampy_args[2]]
@@ -407,6 +410,7 @@ class AppWindow(Gtk.ApplicationWindow):
 			dialog.destroy()
 			self.clear_remote_tree_view(self.remote_treeview)
 			self.enable_remote_buttons(False)
+			self.put_button.set_sensitive(False)
 			return -1
 		
 	def on_port_change(self,port,event):

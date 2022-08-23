@@ -13,8 +13,8 @@ from enum import Enum
 from threading import Thread, Event
 import glob
 
-
-ignore_files = [".DS_Store"]	# ignore these files when listing files in a directory
+# TODO: wildcard .* & configurable over commmand line
+ignore_files = [".DS_Store", ".git", ".idea"]	# ignore these files when listing files in a directory
 
 class MsgType(Enum):
 	""" Different message type options for the terminal window, and the corresponding color of the terminal text.

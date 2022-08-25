@@ -524,7 +524,7 @@ class AppWindow(Gtk.ApplicationWindow):
 		pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
 		remote_store.set(iterator, self.ICON, pixbuf,self.FILENAME, "..",self.TYPE,'d')
 
-		if self.current_remote_path == "":
+		if self.current_remote_path.lstrip() == "":
 			# Much faster method, but only works for the root directory...
 
 			## Fetch the files

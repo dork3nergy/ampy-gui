@@ -784,9 +784,11 @@ class AppWindow(Gtk.ApplicationWindow):
 					if ftype == 'f':
 						args=['rm', self.current_remote_path + '/' + fname]
 						file_in_selection = True
+						self.remote_files.remove(fname)
 					elif ftype == 'd':
 						args = ['rmdir', self.current_remote_path + '/' + fname]
 						directory_in_selection = True
+						self.remote_dirs.remove(fname)
 					if args is None:
 						self.print_and_terminal(terminal_buffer, "Invalid file type detected", MsgType.ERROR)
 						return
@@ -817,7 +819,7 @@ class AppWindow(Gtk.ApplicationWindow):
 						self.print_and_terminal(terminal_buffer, "No files, nor directories deleted?", MsgType.ERROR)
 						return
 					msg = "{} '{}' successfully deleted from device".format(preamb, files)
-				self.populate_remote_tree_model(remote_treeview)
+				self.fill_remote_treeview(remote_treeview)
 				self.print_and_terminal(terminal_buffer, msg, MsgType.INFO)
 
 	def mkdir_button_clicked(self,button, remote_treeview, terminal_buffer):
@@ -833,10 +835,13 @@ class AppWindow(Gtk.ApplicationWindow):
 				dirname = dialog.get_result()
 			dialog.destroy()
 			if dirname != '':
+				if dirname in self.remote_dirs:
+					self.print_and_terminal(self.terminal_buffer, "Remote directory already exists", MsgType.WARNING)
 				args=['mkdir',self.current_remote_path+'/'+dirname]
 				output=subprocess.run(self.ampy_command+args,capture_output=True)
 				if output.returncode == 0:
-					self.populate_remote_tree_model(remote_treeview)
+					self.remote_dirs.append(dirname)
+					self.fill_remote_treeview(remote_treeview)
 				else:
 					error = output.stderr.decode("UTF-8")
 					self.print_and_terminal(self.terminal_buffer, "ERROR: " + error, MsgType.ERROR)

@@ -682,13 +682,12 @@ class AppWindow(Gtk.ApplicationWindow):
 						self.get_file(local_treeview, terminal_buffer,
 										self.current_remote_path + "/" + fname,
 									   	os.path.join(self.current_local_path, fname))
+				self.populate_local_tree_model(local_treeview)
 
 	def get_file(self, local_treeview, terminal_buffer, src_remote_file, dest_local_file, print=True):
 		args = ['get', src_remote_file, dest_local_file]
 		output = subprocess.run(self.ampy_command + args, capture_output=True)
 		if output.returncode == 0:
-			if local_treeview:
-				self.populate_local_tree_model(local_treeview)
 			if print:
 				self.print_and_terminal(terminal_buffer,
 									"File '{}' successfully fetched from device".format(src_remote_file),
@@ -880,13 +879,13 @@ class AppWindow(Gtk.ApplicationWindow):
 
 						# Fetch the file to be run from the remote device as a temp file, run that local temp file, then delete the temp file
 						tmp_file = os.path.join(self.progpath, "tmp", fname)
-						self.get_file(None, terminal_buffer, usepath, tmp_file, print=False)
+						self.get_file(terminal_buffer, usepath, tmp_file, print=False)
 						self.run_local_file(tmp_file, terminal_buffer)
 						os.remove(tmp_file)
 
 	def on_local_row_selected(self, tree_selection):
 		model, paths = tree_selection.get_selected_rows()
-		if paths and len(paths) > 0:
+		if self.connected and paths and len(paths) > 0:
 			self.put_button.set_sensitive(True)
 			all_files = True	# Checks whether only files are selected
 			for fpath in paths:

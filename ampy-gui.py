@@ -13,6 +13,8 @@ from enum import Enum
 from threading import Thread, Event
 import glob
 
+# TODO: wildcard .* & configurable over commmand line
+ignore_files = [".DS_Store", ".git", ".idea"]	# ignore these files when listing files in a directory
 
 class MsgType(Enum):
 	""" Different message type options for the terminal window, and the corresponding color of the terminal text.
@@ -31,6 +33,9 @@ class AppWindow(Gtk.ApplicationWindow):
 
 	local_treeview = None
 	remote_treeview = None
+
+	remote_dirs = []
+	remote_files = []
 
 	run_local_button = None
 
@@ -365,6 +370,9 @@ class AppWindow(Gtk.ApplicationWindow):
 			self.print_and_terminal(terminal_buffer,
 									"Connected to device {}\nHello world!! :)".format(self.ampy_args[0]),
 									MsgType.INFO)
+			model, paths = self.local_treeview.get_selection().get_selected_rows()
+			if len(paths) > 0:
+				self.put_button.set_sensitive(True)
 
 	def update_ampy_command(self):
 		self.ampy_command = ['ampy', '--port', self.ampy_args[0], '--baud',self.ampy_args[1], '--delay',self.ampy_args[2]]
@@ -405,6 +413,7 @@ class AppWindow(Gtk.ApplicationWindow):
 			dialog.destroy()
 			self.clear_remote_tree_view(self.remote_treeview)
 			self.enable_remote_buttons(False)
+			self.put_button.set_sensitive(False)
 			return -1
 		
 	def on_port_change(self,port,event):
@@ -485,6 +494,8 @@ class AppWindow(Gtk.ApplicationWindow):
 		filelst = os.listdir(self.current_local_path)
 		filelst.sort(key=lambda v: (v.upper(), v))
 		for file in filelst:
+			if file in ignore_files:
+				continue
 			temp = os.path.join(self.current_local_path, file)
 			if os.path.isdir(temp):
 				pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
@@ -492,6 +503,8 @@ class AppWindow(Gtk.ApplicationWindow):
 				store.set(iterator, self.ICON, pixbuf, self.FILENAME, file)
 
 		for file in filelst:
+			if file in ignore_files:
+				continue
 			temp = os.path.join(self.current_local_path, file)
 			if os.path.isfile(temp):
 				pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "file.png"))
@@ -506,15 +519,10 @@ class AppWindow(Gtk.ApplicationWindow):
 	def populate_remote_tree_model(self, remote_treeview):
 		self.debug_print("Populating remote tree model")
 
-		remote_store = remote_treeview.get_model()
-		remote_store.clear()
+		self.remote_dirs.clear()
+		self.remote_files.clear()
 
-		# Add '..' to directory
-		iterator = remote_store.append()
-		pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
-		remote_store.set(iterator, self.ICON, pixbuf,self.FILENAME, "..",self.TYPE,'d')
-
-		if self.current_remote_path == "":
+		if self.current_remote_path.strip("/") == "":
 			# Much faster method, but only works for the root directory...
 
 			## Fetch the files
@@ -529,15 +537,11 @@ class AppWindow(Gtk.ApplicationWindow):
 			if directories:
 				for d in directories:
 					if d == '': continue
-					iterator = remote_store.append()
-					pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
-					remote_store.set(iterator, self.ICON, pixbuf, self.FILENAME, d, self.TYPE, 'd')
+					self.remote_dirs.append(d)
 			if files:
 				for f in files:
 					if f == '': continue
-					iterator = remote_store.append()
-					pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "file.png"))
-					remote_store.set(iterator, self.ICON, pixbuf, self.FILENAME, f, self.TYPE, 'f')
+					self.remote_files.append(f)
 		else:
 			# Much slower method, but works for sub-directories of root...
 
@@ -546,19 +550,39 @@ class AppWindow(Gtk.ApplicationWindow):
 			filelist=self.load_remote_directory(self.current_remote_path)
 			for f in filelist:
 				if self.is_remote_dir(self.current_remote_path+'/'+f):
-					iter = remote_store.append()
-					pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
-					isdir = 'd'
-					remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, f,self.TYPE, isdir)
+					self.remote_dirs.append(f)
 				else:
 					nondirs.append(f)
 			for f in range(len(nondirs)):
-				iter = remote_store.append()
-				pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "file.png"))
-				remote_store.set(iter, self.ICON, pixbuf,self.FILENAME, nondirs[f],self.TYPE,'f')
+				self.remote_files.append(nondirs[f])
+
+		self.fill_remote_treeview(remote_treeview)
+
+	def fill_remote_treeview(self, remote_treeview):
+		# Clear the treeview
+		remote_store = remote_treeview.get_model()
+		remote_store.clear()
+
+		# Make sure the files are sorted alphabetically
+		self.remote_dirs.sort(key=lambda v: (v.upper(), v))
+		self.remote_files.sort(key=lambda v: (v.upper(), v))
+
+		# Add '..' to directory
+		iterator = remote_store.append()
+		pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
+		remote_store.set(iterator, self.ICON, pixbuf, self.FILENAME, "..", self.TYPE, 'd')
+
+		# Fill the treeview with the directories and files
+		for d in self.remote_dirs:
+			iterator = remote_store.append()
+			pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "directory.png"))
+			remote_store.set(iterator, self.ICON, pixbuf, self.FILENAME, d, self.TYPE, 'd')
+		for f in self.remote_files:
+			iterator = remote_store.append()
+			pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(self.progpath, "file.png"))
+			remote_store.set(iterator, self.ICON, pixbuf, self.FILENAME, f, self.TYPE, 'f')
 
 		remote_treeview.columns_autosize()
-
 		self.enable_remote_file_buttons(False)
 
 	def is_remote_dir(self, path):
@@ -672,13 +696,12 @@ class AppWindow(Gtk.ApplicationWindow):
 						self.get_file(local_treeview, terminal_buffer,
 										self.current_remote_path + "/" + fname,
 									   	os.path.join(self.current_local_path, fname))
+				self.populate_local_tree_model(local_treeview)
 
 	def get_file(self, local_treeview, terminal_buffer, src_remote_file, dest_local_file, print=True):
 		args = ['get', src_remote_file, dest_local_file]
 		output = subprocess.run(self.ampy_command + args, capture_output=True)
 		if output.returncode == 0:
-			if local_treeview:
-				self.populate_local_tree_model(local_treeview)
 			if print:
 				self.print_and_terminal(terminal_buffer,
 									"File '{}' successfully fetched from device".format(src_remote_file),
@@ -712,6 +735,12 @@ class AppWindow(Gtk.ApplicationWindow):
 												MsgType.ERROR)
 						return
 					self.debug_print("File '{}' successfully uploaded to device".format(file))
+
+					if os.path.isdir(source) and not file in self.remote_dirs:
+						self.remote_dirs.append(file)
+					elif os.path.isfile(source) and not file in self.remote_files:
+						self.remote_files.append(file)
+					self.fill_remote_treeview(remote_treeview)
 
 				self.populate_remote_tree_model(remote_treeview)
 				msg = "File(s) '{}' successfully uploaded to remote device".format(", ".join(files_selected))
@@ -755,9 +784,11 @@ class AppWindow(Gtk.ApplicationWindow):
 					if ftype == 'f':
 						args=['rm', self.current_remote_path + '/' + fname]
 						file_in_selection = True
+						self.remote_files.remove(fname)
 					elif ftype == 'd':
 						args = ['rmdir', self.current_remote_path + '/' + fname]
 						directory_in_selection = True
+						self.remote_dirs.remove(fname)
 					if args is None:
 						self.print_and_terminal(terminal_buffer, "Invalid file type detected", MsgType.ERROR)
 						return
@@ -788,7 +819,7 @@ class AppWindow(Gtk.ApplicationWindow):
 						self.print_and_terminal(terminal_buffer, "No files, nor directories deleted?", MsgType.ERROR)
 						return
 					msg = "{} '{}' successfully deleted from device".format(preamb, files)
-				self.populate_remote_tree_model(remote_treeview)
+				self.fill_remote_treeview(remote_treeview)
 				self.print_and_terminal(terminal_buffer, msg, MsgType.INFO)
 
 	def mkdir_button_clicked(self,button, remote_treeview, terminal_buffer):
@@ -804,10 +835,13 @@ class AppWindow(Gtk.ApplicationWindow):
 				dirname = dialog.get_result()
 			dialog.destroy()
 			if dirname != '':
+				if dirname in self.remote_dirs:
+					self.print_and_terminal(self.terminal_buffer, "Remote directory already exists", MsgType.WARNING)
 				args=['mkdir',self.current_remote_path+'/'+dirname]
 				output=subprocess.run(self.ampy_command+args,capture_output=True)
 				if output.returncode == 0:
-					self.populate_remote_tree_model(remote_treeview)
+					self.remote_dirs.append(dirname)
+					self.fill_remote_treeview(remote_treeview)
 				else:
 					error = output.stderr.decode("UTF-8")
 					self.print_and_terminal(self.terminal_buffer, "ERROR: " + error, MsgType.ERROR)
@@ -870,13 +904,13 @@ class AppWindow(Gtk.ApplicationWindow):
 
 						# Fetch the file to be run from the remote device as a temp file, run that local temp file, then delete the temp file
 						tmp_file = os.path.join(self.progpath, "tmp", fname)
-						self.get_file(None, terminal_buffer, usepath, tmp_file, print=False)
+						self.get_file(terminal_buffer, usepath, tmp_file, print=False)
 						self.run_local_file(tmp_file, terminal_buffer)
 						os.remove(tmp_file)
 
 	def on_local_row_selected(self, tree_selection):
 		model, paths = tree_selection.get_selected_rows()
-		if paths and len(paths) > 0:
+		if self.connected and paths and len(paths) > 0:
 			self.put_button.set_sensitive(True)
 			all_files = True	# Checks whether only files are selected
 			for fpath in paths:
